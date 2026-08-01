@@ -1,0 +1,187 @@
+import Phaser from 'phaser';
+import {
+  Buttons,
+  DEFAULT_LOADOUT,
+  SIM_DT,
+  SimEventType,
+  TUNING,
+  WEAPON_SLOTS,
+  addPlayer,
+  createFoundryMap,
+  createWorld,
+  setInput,
+  stepWorld,
+  weaponDef,
+  type SimWorld,
+  type WeaponId,
+} from '@aerocade/shared';
+import { appStore, type HudState } from '../app/store.js';
+import { KeyboardMouseInput } from './input/KeyboardMouseInput.js';
+import { ArenaScene, type SceneDriver } from './render/ArenaScene.js';
+import { RenderInterpolator } from './render/RenderInterpolator.js';
+
+/** Never simulate more than this many ticks per frame (tab-restore spiral guard). */
+const MAX_CATCHUP_TICKS = 5;
+/** HUD refresh cadence in sim ticks (10 Hz). */
+const HUD_EVERY_TICKS = 6;
+
+const DUMMY_NAMES = ['Bolt Dummy', 'Rivet Dummy'];
+
+/**
+ * A local sandbox match: the full deterministic sim, the local player, and
+ * two practice dummies, rendered by Phaser. This is the exact sim + loop the
+ * networked host runs in M2 — only input sources change (docs/architecture.md).
+ */
+export class GameSession implements SceneDriver {
+  private readonly world: SimWorld;
+  private readonly localPlayer: number;
+  private readonly dummies: number[] = [];
+  private readonly input = new KeyboardMouseInput();
+  private readonly interp = new RenderInterpolator();
+  private game: Phaser.Game | null = null;
+  private scene: ArenaScene | null = null;
+  private accumulator = 0;
+  private lastAim = 0;
+  private destroyed = false;
+
+  constructor(parent: HTMLElement) {
+    // The sandbox is local-only; wall-clock seeding is fine (the sim itself
+    // stays deterministic per seed — networked seeds come from the host).
+    this.world = createWorld(createFoundryMap(), Date.now() >>> 0);
+    this.localPlayer = addPlayer(this.world);
+    this.dummies.push(addPlayer(this.world), addPlayer(this.world));
+
+    this.input.attach();
+    const scene = new ArenaScene(this, this.world, this.localPlayer);
+    this.game = new Phaser.Game({
+      type: Phaser.AUTO,
+      parent,
+      backgroundColor: '#0b1020',
+      banner: false,
+      audio: { noAudio: true },
+      scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+      },
+      scene,
+    });
+  }
+
+  onSceneReady(scene: ArenaScene): void {
+    this.scene = scene;
+    this.interp.capture(this.world); // both buffers start at spawn state
+    this.interp.capture(this.world);
+  }
+
+  onFrame(deltaMs: number): void {
+    if (this.destroyed || this.scene === null) return;
+
+    this.accumulator += Math.min(deltaMs, 250) / 1000;
+    let steps = 0;
+    while (this.accumulator >= SIM_DT && steps < MAX_CATCHUP_TICKS) {
+      this.tick();
+      this.accumulator -= SIM_DT;
+      steps += 1;
+    }
+    if (steps === MAX_CATCHUP_TICKS) this.accumulator = 0; // drop backlog, stay live
+
+    const alpha = this.accumulator / SIM_DT;
+    this.scene.renderFrame(this.interp, alpha, deltaMs);
+  }
+
+  private tick(): void {
+    const scene = this.scene;
+    if (scene === null) return;
+
+    const sampled = this.input.sample();
+    this.lastAim = scene.computeAimFor(this.localPlayer, this.interp);
+    setInput(this.world, this.localPlayer, {
+      seq: this.world.tick,
+      moveX: sampled.moveX,
+      moveY: sampled.moveY,
+      aim: this.lastAim,
+      buttons: sampled.buttons,
+    });
+    this.driveDummies();
+
+    stepWorld(this.world);
+    this.interp.capture(this.world);
+    scene.applyEvents(this.world);
+    this.consumeEvents();
+
+    if (this.world.tick % HUD_EVERY_TICKS === 0) this.publishHud();
+  }
+
+  /**
+   * Practice dummies: one stands its ground, one paces and hops. Scripted,
+   * deterministic input — they use the same input path a remote player will.
+   */
+  private driveDummies(): void {
+    const tick = this.world.tick;
+    const pacer = this.dummies[0];
+    const sitter = this.dummies[1];
+    if (pacer !== undefined) {
+      const phase = Math.floor(tick / 90) % 2; // turn around every 1.5 s
+      const hop = tick % 240 === 0 ? Buttons.Jump : 0;
+      setInput(this.world, pacer, {
+        seq: tick,
+        moveX: phase === 0 ? 0.6 : -0.6,
+        moveY: 0,
+        aim: phase === 0 ? 0 : Math.PI,
+        buttons: hop,
+      });
+    }
+    if (sitter !== undefined) {
+      setInput(this.world, sitter, { seq: tick, moveX: 0, moveY: 0, aim: 0, buttons: 0 });
+    }
+  }
+
+  private consumeEvents(): void {
+    this.world.events.forEach((ev) => {
+      if (ev.type === SimEventType.Death) {
+        appStore.pushKill(this.nameOf(ev.b), this.nameOf(ev.a));
+      }
+    });
+  }
+
+  private nameOf(slot: number): string {
+    if (slot === this.localPlayer) return 'You';
+    const dummyIndex = this.dummies.indexOf(slot);
+    if (dummyIndex >= 0) return DUMMY_NAMES[dummyIndex] ?? 'Dummy';
+    return slot < 0 ? 'The Arena' : `Player ${String(slot + 1)}`;
+  }
+
+  private publishHud(): void {
+    const p = this.world.players;
+    const i = this.localPlayer;
+    const slot = p.weaponSlot[i] ?? 0;
+    const slotIndex = i * WEAPON_SLOTS + slot;
+    const def = weaponDef((p.weapons[slotIndex] ?? DEFAULT_LOADOUT[0]) as WeaponId);
+
+    const hud: HudState = {
+      health: Math.max(0, Math.round(p.health[i] ?? 0)),
+      maxHealth: TUNING.player.maxHealth,
+      fuel: Math.round(p.fuel[i] ?? 0),
+      maxFuel: TUNING.jetpack.maxFuel,
+      ammoMag: p.ammoMag[slotIndex] ?? 0,
+      ammoReserve: p.ammoReserve[slotIndex] ?? 0,
+      weaponName: def.name,
+      grenades: p.grenades[i] ?? 0,
+      reloading: (p.reload[i] ?? 0) > 0,
+      kills: p.kills[i] ?? 0,
+      deaths: p.deaths[i] ?? 0,
+      respawnIn: p.status[i] === 1 ? 0 : Math.ceil(p.respawn[i] ?? 0),
+      protectFor: p.protect[i] ?? 0,
+      fps: Math.round(this.game?.loop.actualFps ?? 0),
+    };
+    appStore.setHud(hud);
+  }
+
+  destroy(): void {
+    this.destroyed = true;
+    this.input.detach();
+    this.game?.destroy(true);
+    this.game = null;
+    this.scene = null;
+  }
+}

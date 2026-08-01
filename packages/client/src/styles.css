@@ -1,0 +1,309 @@
+:root {
+  --ac-bg: #0b1020;
+  --ac-panel: rgba(13, 20, 40, 0.86);
+  --ac-text: #dbe6ff;
+  --ac-dim: #7c8ab0;
+  --ac-accent: #ffa03c;
+  --ac-accent2: #3cd6ff;
+  --ac-danger: #ff4d5e;
+  --ac-ok: #55e08c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ac-bg);
+  color: var(--ac-text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.game-mount {
+  position: absolute;
+  inset: 0;
+}
+
+.game-mount canvas {
+  cursor: crosshair;
+}
+
+/* ---------- Menu ---------- */
+
+.menu {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(60, 214, 255, 0.08), transparent 60%),
+    radial-gradient(ellipse at 70% 80%, rgba(255, 160, 60, 0.08), transparent 60%),
+    var(--ac-bg);
+}
+
+.menu h1 {
+  font-size: clamp(40px, 8vw, 84px);
+  letter-spacing: 0.18em;
+  margin: 0 0 4px;
+  color: var(--ac-text);
+  text-shadow:
+    0 0 24px rgba(60, 214, 255, 0.35),
+    0 4px 0 rgba(0, 0, 0, 0.4);
+}
+
+.menu .tagline {
+  color: var(--ac-dim);
+  margin-bottom: 28px;
+  letter-spacing: 0.08em;
+}
+
+.menu button {
+  width: min(320px, 80vw);
+  padding: 14px 18px;
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  color: var(--ac-text);
+  background: var(--ac-panel);
+  border: 1px solid rgba(124, 138, 176, 0.35);
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.05s;
+}
+
+.menu button:hover:not(:disabled) {
+  border-color: var(--ac-accent2);
+}
+
+.menu button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.menu .hint {
+  margin-top: 26px;
+  color: var(--ac-dim);
+  font-size: 13px;
+  max-width: 560px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.menu kbd {
+  background: rgba(124, 138, 176, 0.18);
+  border: 1px solid rgba(124, 138, 176, 0.4);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+}
+
+/* ---------- HUD ---------- */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-corner {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hud-bottom-left {
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  min-width: 220px;
+}
+
+.hud-bottom-right {
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  text-align: right;
+}
+
+.hud-top-right {
+  right: max(16px, env(safe-area-inset-right));
+  top: max(12px, env(safe-area-inset-top));
+  text-align: right;
+  gap: 4px;
+}
+
+.hud-top-left {
+  left: max(16px, env(safe-area-inset-left));
+  top: max(12px, env(safe-area-inset-top));
+  gap: 4px;
+}
+
+.bar {
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(10, 14, 28, 0.7);
+  border: 1px solid rgba(124, 138, 176, 0.35);
+  overflow: hidden;
+}
+
+.bar > div {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 90ms linear;
+}
+
+.bar-health > div {
+  background: linear-gradient(90deg, #2fbf71, var(--ac-ok));
+}
+
+.bar-health.low > div {
+  background: linear-gradient(90deg, #b3273b, var(--ac-danger));
+}
+
+.bar-fuel > div {
+  background: linear-gradient(90deg, #1f8fbd, var(--ac-accent2));
+}
+
+.bar-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--ac-dim);
+  margin-bottom: 2px;
+}
+
+.ammo {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--ac-text);
+  line-height: 1;
+}
+
+.ammo .reserve {
+  font-size: 18px;
+  color: var(--ac-dim);
+}
+
+.weapon-name {
+  color: var(--ac-accent);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+}
+
+.grenades {
+  color: var(--ac-dim);
+  font-size: 13px;
+}
+
+.reloading {
+  color: var(--ac-accent2);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+.killfeed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.killfeed .entry {
+  background: var(--ac-panel);
+  border: 1px solid rgba(124, 138, 176, 0.25);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.killfeed .entry .killer {
+  color: var(--ac-accent);
+}
+
+.killfeed .entry .victim {
+  color: var(--ac-accent2);
+}
+
+.scorebox {
+  background: var(--ac-panel);
+  border: 1px solid rgba(124, 138, 176, 0.25);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--ac-dim);
+}
+
+.respawn-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(11, 16, 32, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.respawn-overlay .title {
+  font-size: 34px;
+  letter-spacing: 0.14em;
+  color: var(--ac-danger);
+}
+
+.respawn-overlay .count {
+  font-size: 20px;
+  color: var(--ac-text);
+}
+
+.protect-note {
+  position: absolute;
+  top: 18%;
+  width: 100%;
+  text-align: center;
+  color: var(--ac-accent2);
+  letter-spacing: 0.12em;
+  font-size: 14px;
+  text-shadow: 0 0 12px rgba(60, 214, 255, 0.6);
+}
+
+.back-button {
+  pointer-events: auto;
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ac-panel);
+  color: var(--ac-dim);
+  border: 1px solid rgba(124, 138, 176, 0.35);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.back-button:hover {
+  color: var(--ac-text);
+  border-color: var(--ac-accent2);
+}

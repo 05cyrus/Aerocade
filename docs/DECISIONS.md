@@ -7,7 +7,7 @@ Newer entries may supersede older ones; superseded entries are marked, never del
 
 **Aerocade** is an original 2D side-view jetpack arena shooter, browser-native, playable over
 LAN with zero internet, zero cloud, zero accounts. All art, audio, maps, weapon tuning, UI, and
-branding are original works. The game is *inspired by the feel* of 2014–2018 era jetpack arena
+branding are original works. The game is _inspired by the feel_ of 2014–2018 era jetpack arena
 shooters but shares no assets, values, or code with any existing title.
 
 ## ADR-002: Monorepo with npm workspaces
@@ -61,7 +61,7 @@ a generic archetype ECS would add indirection without benefit at this scale.
 ## ADR-006: Networking — host-authoritative star over WebRTC DataChannels, LAN bridge for rendezvous
 
 **Browser reality check** (evaluated): browsers cannot open listening sockets, cannot UDP
-broadcast, cannot mDNS-query (mDNS in WebRTC is *obfuscation*, not discovery), and
+broadcast, cannot mDNS-query (mDNS in WebRTC is _obfuscation_, not discovery), and
 WebTransport needs HTTP/3 + trusted certs (hostile on LAN, weak Safari support). Therefore
 pure browser-to-browser discovery on a LAN is impossible; a rendezvous point must exist.
 
@@ -105,7 +105,7 @@ renderer's business. All gameplay tuning constants live in `sim/tuning.ts` and w
 - No `Date.now`/wall clock in sim — time is `tick * SIM_DT`.
 - Iteration is always by ascending entity index.
 - Trig/sqrt float nondeterminism across engines is accepted: the host is the single source of
-  truth, prediction errors are corrected by reconciliation (we need *practical* determinism
+  truth, prediction errors are corrected by reconciliation (we need _practical_ determinism
   for replaying our own inputs, not cross-machine lockstep).
 
 ## ADR-010: Testing strategy
@@ -121,7 +121,7 @@ renderer's business. All gameplay tuning constants live in `sim/tuning.ts` and w
 
 Original design: thrust auto-modulated into altitude hold whenever |velY| < 1.5 m/s.
 Unit tests killed it: with gravity and thrust applied within the same tick, an
-*accelerating climb* passes through the band every liftoff, so players got captured into a
+_accelerating climb_ passes through the band every liftoff, so players got captured into a
 hover millimeters off the ground and could never climb. Any band-based rule is inherently
 ambiguous between "climbing through slow speeds" and "wants to hover", and stateful
 workarounds (latches, edge tracking) add reconciliation surface for no gameplay win.

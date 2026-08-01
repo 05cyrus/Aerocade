@@ -197,12 +197,6 @@ export class ArenaScene extends Phaser.Scene {
 
       // Spawn protection shimmer.
       body.setAlpha((p.protect[i] ?? 0) > 0 ? 0.55 + 0.3 * Math.sin(this.time.now / 60) : 1);
-
-      // Jet plume while thrusting with fuel.
-      const cmd = world.inputs[i];
-      if (cmd !== undefined && (cmd.buttons & Buttons.Thrust) !== 0 && (p.fuel[i] ?? 0) > 0) {
-        this.jetEmitter.emitParticleAt(x, y + (TUNING.player.height / 2) * PX_PER_M - 4, 1);
-      }
     }
 
     this.renderProjectiles(interp, alpha);
@@ -280,6 +274,27 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   // ---------- sim event visuals ----------
+
+  /**
+   * Per-sim-tick continuous effects (60 Hz regardless of display refresh —
+   * per-frame emission would scale plume density with the monitor).
+   */
+  emitTickEffects(world: SimWorld): void {
+    const p = world.players;
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      if (p.connected[i] !== 1 || p.status[i] !== 1) continue;
+      const cmd = world.inputs[i];
+      if (cmd === undefined || (cmd.buttons & Buttons.Thrust) === 0 || (p.fuel[i] ?? 0) <= 0) {
+        continue;
+      }
+      // Hover (thrust + down input, ADR-011) idles the jets at half density.
+      const hovering = cmd.moveY > 0.5 && p.grounded[i] !== 1;
+      if (hovering && world.tick % 2 === 0) continue;
+      const x = (p.posX[i] ?? 0) * PX_PER_M;
+      const y = (p.posY[i] ?? 0) * PX_PER_M + (TUNING.player.height / 2) * PX_PER_M - 4;
+      this.jetEmitter.emitParticleAt(x, y, 1);
+    }
+  }
 
   /** Called once per sim tick with that tick's events. */
   applyEvents(world: SimWorld): void {

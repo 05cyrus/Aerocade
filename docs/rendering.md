@@ -19,22 +19,22 @@ that ruled out Matter.js for the sim:
 - **Determinism.** Prediction and reconciliation re-simulate ticks from snapshots
   ([networking.md](networking.md)); any physics living inside the renderer would diverge from
   the authoritative sim and cannot be rewound.
-- **Single source of truth.** Sprite `x/y/rotation` are *outputs* written once per frame from
+- **Single source of truth.** Sprite `x/y/rotation` are _outputs_ written once per frame from
   interpolated sim state. If Phaser also moved bodies, two owners would fight over the same
   transforms.
 - **Sim runs headless.** `packages/shared` has zero dependencies and no DOM; it must run
   identically in the host browser, predicting clients, and Node test runners. Phaser is a
   client-only concern.
 
-What Phaser *does* own:
+What Phaser _does_ own:
 
-| Responsibility | Notes |
-|---|---|
-| WebGL rendering | sprites, tilemap layers, particle emitters, `Graphics` for beams |
-| Texture registry | procedural `CanvasTexture`s generated in `BootScene` |
-| Audio | Web Audio via Phaser sound manager; clips are generated, not loaded |
+| Responsibility   | Notes                                                                     |
+| ---------------- | ------------------------------------------------------------------------- |
+| WebGL rendering  | sprites, tilemap layers, particle emitters, `Graphics` for beams          |
+| Texture registry | procedural `CanvasTexture`s generated in `BootScene`                      |
+| Audio            | Web Audio via Phaser sound manager; clips are generated, not loaded       |
 | Raw input events | keyboard/pointer/Gamepad API events, forwarded to the shared input mapper |
-| Cameras | follow, bounds clamp, shake, parallax scroll factors |
+| Cameras          | follow, bounds clamp, shake, parallax scroll factors                      |
 
 The renderer consumes `SimWorld` snapshots read-only. The only data flowing the other way is
 sampled input intent (see [ui.md](ui.md) for the mapping layer).
@@ -68,8 +68,8 @@ transitions never touch React routing and vice versa.
 
 Per [ADR-004](DECISIONS.md#adr-004-simulation-is-authoritative-rendering-interpolates), the sim
 steps at a fixed 60 Hz (`SIM_DT = 1/60`) inside an accumulator loop, and rendering runs at
-display rate (60–144 Hz). The game loop keeps **two** state views: `prevState` (tick *t−1*)
-and `currState` (tick *t*), both typed-array snapshots. After stepping, the leftover
+display rate (60–144 Hz). The game loop keeps **two** state views: `prevState` (tick _t−1_)
+and `currState` (tick _t_), both typed-array snapshots. After stepping, the leftover
 accumulator yields the blend factor:
 
 ```
@@ -100,11 +100,11 @@ sim, touching only entities whose `alive` flag is set.
 Sim pools are fixed-capacity (players ×8, projectiles ×256, pickups ×64). The renderer
 allocates matching sprite pools **once** in `ArenaScene.create` and never afterwards:
 
-| Sim pool | Render pool | Sync rule |
-|---|---|---|
-| players ×8 | 8 player rigs (body + jetpack flame + weapon sprite) | index *i* sim ↔ index *i* sprite |
-| projectiles ×256 | 256 sprites | texture swapped by weapon kind on activation |
-| pickups ×64 | 64 sprites | bob/pulse tween driven by render clock, position by sim |
+| Sim pool         | Render pool                                          | Sync rule                                               |
+| ---------------- | ---------------------------------------------------- | ------------------------------------------------------- |
+| players ×8       | 8 player rigs (body + jetpack flame + weapon sprite) | index _i_ sim ↔ index _i_ sprite                        |
+| projectiles ×256 | 256 sprites                                          | texture swapped by weapon kind on activation            |
+| pickups ×64      | 64 sprites                                           | bob/pulse tween driven by render clock, position by sim |
 
 Sync per frame: if `alive[i]` and sprite hidden → activate (`setVisible(true)`, assign
 texture); if dead and visible → deactivate. Active sprites get position/rotation/flip written
@@ -127,15 +127,15 @@ to resemble anything — and keeps the PWA precache tiny ([ADR-007](DECISIONS.md
 
 Generation strategy per family:
 
-| Family | Technique |
-|---|---|
-| Tileset (Foundry) | 1 m tiles: base fill + edge bevel gradient + seeded rivet/scratch detail |
-| Player bodies | rounded capsule silhouette (0.85 × 1.65 m AABB proportions), team-tintable greyscale base |
-| Weapons | layered rects/polys per weapon def; one texture per roster entry, keyed by weapon id |
-| Projectiles | radial-gradient bolts, rocket/grenade silhouettes with emissive rim |
-| Particles | soft radial discs (smoke, flash, spark) at 3 sizes |
-| Background layers | large low-frequency gradient + silhouette shapes, one texture per parallax layer |
-| UI icons / PWA icons | same pipeline, exported to the manifest at build time |
+| Family               | Technique                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| Tileset (Foundry)    | 1 m tiles: base fill + edge bevel gradient + seeded rivet/scratch detail                  |
+| Player bodies        | rounded capsule silhouette (0.85 × 1.65 m AABB proportions), team-tintable greyscale base |
+| Weapons              | layered rects/polys per weapon def; one texture per roster entry, keyed by weapon id      |
+| Projectiles          | radial-gradient bolts, rocket/grenade silhouettes with emissive rim                       |
+| Particles            | soft radial discs (smoke, flash, spark) at 3 sizes                                        |
+| Background layers    | large low-frequency gradient + silhouette shapes, one texture per parallax layer          |
+| UI icons / PWA icons | same pipeline, exported to the manifest at build time                                     |
 
 Textures are generated once at a fixed authoring resolution, registered as
 `Phaser.Textures.CanvasTexture`, and never regenerated mid-match. Team/player coloring uses
@@ -146,7 +146,7 @@ and batch breaks — low.
 
 One main camera plus parallax scroll factors (no second camera needed):
 
-- **Follow** the local player's *interpolated* render position with `lerp` smoothing
+- **Follow** the local player's _interpolated_ render position with `lerp` smoothing
   (~0.12/frame), so camera motion is as smooth as the entity it tracks.
 - **Aim lookahead**: the follow target is offset toward the aim direction by up to 2.5 m,
   eased, so players see more of where they are shooting — vital with the Longbolt's range.
@@ -162,18 +162,18 @@ One main camera plus parallax scroll factors (no second camera needed):
 
 Fixed depth bands; sprites set depth once at pool creation, never per frame:
 
-| Depth | Layer | Scroll factor |
-|---:|---|---:|
-| 0 | Sky gradient backdrop | 0.0 |
-| 10 | Far silhouettes (stacks, gantries) | 0.25 |
-| 20 | Near background structures | 0.55 |
-| 30 | Tilemap: behind-tiles (pipes, braces) | 1.0 |
-| 40 | Pickups | 1.0 |
-| 50 | Players (local player rendered last within band) | 1.0 |
-| 60 | Projectiles, beams | 1.0 |
-| 70 | Tilemap: foreground lips/overhangs | 1.0 |
-| 80 | Particles (flash, smoke, explosions) | 1.0 |
-| 90 | World-space markers (spawn shimmer, hit flashes) | 1.0 |
+| Depth | Layer                                            | Scroll factor |
+| ----: | ------------------------------------------------ | ------------: |
+|     0 | Sky gradient backdrop                            |           0.0 |
+|    10 | Far silhouettes (stacks, gantries)               |          0.25 |
+|    20 | Near background structures                       |          0.55 |
+|    30 | Tilemap: behind-tiles (pipes, braces)            |           1.0 |
+|    40 | Pickups                                          |           1.0 |
+|    50 | Players (local player rendered last within band) |           1.0 |
+|    60 | Projectiles, beams                               |           1.0 |
+|    70 | Tilemap: foreground lips/overhangs               |           1.0 |
+|    80 | Particles (flash, smoke, explosions)             |           1.0 |
+|    90 | World-space markers (spawn shimmer, hit flashes) |           1.0 |
 
 Parallax layers are single large `TileSprite`s scrolled by camera position — three quads total,
 negligible cost. The React HUD sits above depth 90 in DOM space and is untouched by camera or

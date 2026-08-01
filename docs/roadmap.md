@@ -8,7 +8,7 @@ everything in the "won't do" section — is out of scope until this document cha
 
 ## Committed milestones (pre-1.0)
 
-Milestones are sequential; a milestone is *done* when every acceptance criterion passes and
+Milestones are sequential; a milestone is _done_ when every acceptance criterion passes and
 `npm run verify` (typecheck + lint + tests + build) is green. Playwright joins the gate at M2
 per [DECISIONS.md](DECISIONS.md) ADR-010.
 
@@ -59,7 +59,7 @@ ADR. See [architecture.md](architecture.md).
 - Rocket-jumping works: Thumper self-knockback propels the player measurably (test asserts
   vertical velocity gain within a tolerance band).
 - Weapon/health/ammo pickups spawn and respawn deterministically from the seeded RNG.
-- Lag compensation: 64-tick rewind ring; a hitscan test fires at a target's *rewound* position
+- Lag compensation: 64-tick rewind ring; a hitscan test fires at a target's _rewound_ position
   and must register the hit that a non-compensated check would miss.
 
 ### M4 — Match lifecycle
@@ -107,18 +107,18 @@ ADR. See [architecture.md](architecture.md).
 Ranked by value against effort. "Effort" assumes the shipped architecture; feasibility notes
 call out where the browser platform, not our code, is the constraint.
 
-| Rank | Item | Value | Effort | Key risk / constraint |
-|---:|---|---|---|---|
-| 1 | Replay recording & playback | High | Low | None — determinism makes it nearly free |
-| 2 | Gun Game + King of the Hill modes | High | Low | None — pure sim-side systems |
-| 3 | Spectator mode | Med | Low | Host upload bandwidth per extra subscriber |
-| 4 | Dedicated Node host | Med | Med | Node-side WebRTC needs a lib, or WS-only |
-| 5 | Controller remapping UI | Med | Low–Med | UI surface area, conflict handling |
-| 6 | Map editor + IndexedDB maps + file share | High | High | Map validation, versioning, UX cost |
-| 7 | Destructible props | Med | Med | Snapshot size + determinism of debris |
-| 8 | Audio synthesis upgrades | Low–Med | Med | Web Audio scheduling jitter on mobile |
-| 9 | Localization pass | Low–Med | Med | String extraction across React + canvas HUD |
-| 10 | Internet play via community bridge+TURN | Med | High | Explicitly out of core scope (see below) |
+| Rank | Item                                     | Value   | Effort  | Key risk / constraint                       |
+| ---: | ---------------------------------------- | ------- | ------- | ------------------------------------------- |
+|    1 | Replay recording & playback              | High    | Low     | None — determinism makes it nearly free     |
+|    2 | Gun Game + King of the Hill modes        | High    | Low     | None — pure sim-side systems                |
+|    3 | Spectator mode                           | Med     | Low     | Host upload bandwidth per extra subscriber  |
+|    4 | Dedicated Node host                      | Med     | Med     | Node-side WebRTC needs a lib, or WS-only    |
+|    5 | Controller remapping UI                  | Med     | Low–Med | UI surface area, conflict handling          |
+|    6 | Map editor + IndexedDB maps + file share | High    | High    | Map validation, versioning, UX cost         |
+|    7 | Destructible props                       | Med     | Med     | Snapshot size + determinism of debris       |
+|    8 | Audio synthesis upgrades                 | Low–Med | Med     | Web Audio scheduling jitter on mobile       |
+|    9 | Localization pass                        | Low–Med | Med     | String extraction across React + canvas HUD |
+|   10 | Internet play via community bridge+TURN  | Med     | High    | Explicitly out of core scope (see below)    |
 
 ### Replay recording from input logs
 
@@ -169,7 +169,7 @@ the map blob to joiners over the reliable channel so clients never need the file
 Feasible if kept deterministic and pooled: props as a small fixed pool (like pickups) with
 health, destroyed flags in snapshots, debris purely cosmetic (renderer-side, never simulated).
 The constraint is discipline, not the browser: destruction state must live in the sim pools
-and delta-encode cheaply. Full destructible *terrain* (mutating the tile grid mid-match) is a
+and delta-encode cheaply. Full destructible _terrain_ (mutating the tile grid mid-match) is a
 much bigger snapshot/reconciliation problem and is not planned.
 
 ### Moving platforms and jump pads

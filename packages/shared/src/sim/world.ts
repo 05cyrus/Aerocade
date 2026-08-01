@@ -1,17 +1,18 @@
-import { MAX_DAMAGE_REQUESTS, MAX_PLAYERS, MAX_PROJECTILES, NO_PLAYER, SIM_DT, WEAPON_SLOTS } from '../constants.js';
+import {
+  MAX_DAMAGE_REQUESTS,
+  MAX_PLAYERS,
+  MAX_PROJECTILES,
+  NO_PLAYER,
+  SIM_DT,
+  WEAPON_SLOTS,
+} from '../constants.js';
 import { Rng } from '../math/rng.js';
 import { EventBuffer } from './events.js';
 import { emptyInput, type InputCommand } from './input.js';
 import type { MapDef } from './map/mapdef.js';
 
 /** Any typed array we snapshot. */
-type PoolArray =
-  | Float64Array
-  | Float32Array
-  | Int16Array
-  | Int8Array
-  | Uint8Array
-  | Uint16Array;
+type PoolArray = Float64Array | Float32Array | Int16Array | Int8Array | Uint8Array | Uint16Array;
 
 /** Copy every array of `src` into the same-shaped `dst`. */
 function copyArrays(src: readonly PoolArray[], dst: readonly PoolArray[]): void {
@@ -73,12 +74,35 @@ export class PlayerPool {
 
   /** Every array, in a fixed order shared by snapshot/restore/hash. */
   readonly all: readonly PoolArray[] = [
-    this.connected, this.status, this.posX, this.posY, this.velX, this.velY,
-    this.aim, this.health, this.fuel, this.fuelRegenWait, this.grounded,
-    this.coyote, this.weaponSlot, this.weapons, this.ammoMag, this.ammoReserve,
-    this.reload, this.cooldown, this.bloom, this.meleeCooldown, this.grenades,
-    this.respawn, this.protect, this.prevButtons, this.kills, this.deaths,
-    this.score, this.team, this.lastDamageBy,
+    this.connected,
+    this.status,
+    this.posX,
+    this.posY,
+    this.velX,
+    this.velY,
+    this.aim,
+    this.health,
+    this.fuel,
+    this.fuelRegenWait,
+    this.grounded,
+    this.coyote,
+    this.weaponSlot,
+    this.weapons,
+    this.ammoMag,
+    this.ammoReserve,
+    this.reload,
+    this.cooldown,
+    this.bloom,
+    this.meleeCooldown,
+    this.grenades,
+    this.respawn,
+    this.protect,
+    this.prevButtons,
+    this.kills,
+    this.deaths,
+    this.score,
+    this.team,
+    this.lastDamageBy,
   ];
 }
 
@@ -106,8 +130,15 @@ export class ProjectilePool {
   readonly fuse = new Float32Array(MAX_PROJECTILES);
 
   readonly all: readonly PoolArray[] = [
-    this.alive, this.kind, this.weapon, this.owner,
-    this.posX, this.posY, this.velX, this.velY, this.fuse,
+    this.alive,
+    this.kind,
+    this.weapon,
+    this.owner,
+    this.posX,
+    this.posY,
+    this.velX,
+    this.velY,
+    this.fuse,
   ];
 
   /** First free slot, or -1 when saturated (oldest is NOT evicted; spawn fails). */
@@ -132,7 +163,11 @@ export interface DamageRequest {
 /** Preallocated damage queue; cleared every tick. */
 export class DamageQueue {
   private readonly pool: DamageRequest[] = Array.from({ length: MAX_DAMAGE_REQUESTS }, () => ({
-    target: 0, amount: 0, source: NO_PLAYER, impulseX: 0, impulseY: 0,
+    target: 0,
+    amount: 0,
+    source: NO_PLAYER,
+    impulseX: 0,
+    impulseY: 0,
   }));
   private len = 0;
 

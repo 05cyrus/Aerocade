@@ -45,6 +45,7 @@ export class GameSession implements SceneDriver {
   private destroyed = false;
 
   constructor(parent: HTMLElement) {
+    appStore.reset(); // no HUD/kill-feed state may leak from a previous match
     // The sandbox is local-only; wall-clock seeding is fine (the sim itself
     // stays deterministic per seed — networked seeds come from the host).
     this.world = createWorld(createFoundryMap(), Date.now() >>> 0);
@@ -71,6 +72,7 @@ export class GameSession implements SceneDriver {
     this.scene = scene;
     this.interp.capture(this.world); // both buffers start at spawn state
     this.interp.capture(this.world);
+    this.publishHud(); // the HUD must show this match from the first frame
   }
 
   onFrame(deltaMs: number): void {
@@ -107,6 +109,7 @@ export class GameSession implements SceneDriver {
     stepWorld(this.world);
     this.interp.capture(this.world);
     scene.applyEvents(this.world);
+    scene.emitTickEffects(this.world);
     this.consumeEvents();
 
     if (this.world.tick % HUD_EVERY_TICKS === 0) this.publishHud();

@@ -23,7 +23,11 @@ export interface InputCommand {
   seq: number;
   /** Horizontal move axis in [-1, 1]. Magnitude selects walk/run speed. */
   moveX: number;
-  /** Vertical move axis in [-1, 1] (reserved for analog thrust/crouch use). */
+  /**
+   * Vertical move axis in [-1, 1], y-down (+1 = down input).
+   * moveY > 0.5 while Thrust is held triggers jetpack hover (ADR-011) — any
+   * wire codec or input sampler must preserve at least that threshold.
+   */
   moveY: number;
   /** Aim direction in radians, screen convention (y-down, 0 = right). */
   aim: number;

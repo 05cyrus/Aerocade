@@ -105,7 +105,10 @@ describe('projectiles', () => {
     run(world, 20);
     // Aim over b's head so the rocket detonates on the wall above them —
     // splash, not a direct hit, is what this test exercises.
-    const aimAtWall = Math.atan2(7 - (world.players.posY[a] ?? 0), 19 - (world.players.posX[a] ?? 0));
+    const aimAtWall = Math.atan2(
+      7 - (world.players.posY[a] ?? 0),
+      19 - (world.players.posX[a] ?? 0),
+    );
     stage(world, a, { buttons: Buttons.Fire, aim: aimAtWall });
     run(world, 1);
     stage(world, a, {});

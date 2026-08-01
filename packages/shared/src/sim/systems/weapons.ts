@@ -70,8 +70,11 @@ export function weaponsSystem(world: SimWorld): void {
       if (mag < activeDef.magSize && reserve > 0) {
         p.reload[i] = activeDef.reloadTime;
         world.events.emit(
-          SimEventType.ReloadStart, i, activeDef.id,
-          p.posX[i] ?? 0, p.posY[i] ?? 0,
+          SimEventType.ReloadStart,
+          i,
+          activeDef.id,
+          p.posX[i] ?? 0,
+          p.posY[i] ?? 0,
         );
       }
     }
@@ -81,16 +84,22 @@ export function weaponsSystem(world: SimWorld): void {
     if (wantsFire && (p.reload[i] ?? 0) === 0 && (p.cooldown[i] ?? 0) === 0) {
       const mag = p.ammoMag[activeIndex] ?? 0;
       if (mag <= 0) {
+        // Any empty fire request starts the reload (holding the trigger on an
+        // auto weapon must not stall the gun); the dry-fire *sound* stays
+        // edge-triggered so it clicks once instead of buzzing.
         if ((pressed & Buttons.Fire) !== 0) {
           world.events.emit(SimEventType.DryFire, i, activeDef.id, p.posX[i] ?? 0, p.posY[i] ?? 0);
-          const reserve = p.ammoReserve[activeIndex] ?? 0;
-          if (reserve > 0) {
-            p.reload[i] = activeDef.reloadTime;
-            world.events.emit(
-              SimEventType.ReloadStart, i, activeDef.id,
-              p.posX[i] ?? 0, p.posY[i] ?? 0,
-            );
-          }
+        }
+        const reserve = p.ammoReserve[activeIndex] ?? 0;
+        if (reserve > 0) {
+          p.reload[i] = activeDef.reloadTime;
+          world.events.emit(
+            SimEventType.ReloadStart,
+            i,
+            activeDef.id,
+            p.posX[i] ?? 0,
+            p.posY[i] ?? 0,
+          );
         }
       } else {
         fireWeapon(world, i, activeIndex, activeDef);
@@ -138,8 +147,18 @@ function fireWeapon(world: SimWorld, shooter: number, ammoIndex: number, def: We
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
     spawnProjectile(
-      world, shooter, ProjectileKind.Weapon, def.id,
-      originX, originY, dirX, dirY, def.projectile.speed, def.projectile.fuse, 0, 0,
+      world,
+      shooter,
+      ProjectileKind.Weapon,
+      def.id,
+      originX,
+      originY,
+      dirX,
+      dirY,
+      def.projectile.speed,
+      def.projectile.fuse,
+      0,
+      0,
     );
   }
 
@@ -168,10 +187,7 @@ function fireHitscanRay(
   let hitDist = wallDist;
   for (let t = 0; t < MAX_PLAYERS; t++) {
     if (t === shooter || p.connected[t] !== 1 || p.status[t] !== 1) continue;
-    const d = rayVsAabb(
-      originX, originY, dirX, dirY,
-      p.posX[t] ?? 0, p.posY[t] ?? 0, halfW, halfH,
-    );
+    const d = rayVsAabb(originX, originY, dirX, dirY, p.posX[t] ?? 0, p.posY[t] ?? 0, halfW, halfH);
     if (d < hitDist) {
       hitDist = d;
       hitPlayer = t;
@@ -234,11 +250,26 @@ function throwFragGrenade(world: SimWorld, thrower: number): void {
   const inheritY = (p.velY[thrower] ?? 0) * g.velocityInherit;
 
   spawnProjectile(
-    world, thrower, ProjectileKind.FragGrenade, 0,
-    p.posX[thrower] ?? 0, p.posY[thrower] ?? 0,
-    dirX, dirY, g.throwSpeed, g.fuse, inheritX, inheritY,
+    world,
+    thrower,
+    ProjectileKind.FragGrenade,
+    0,
+    p.posX[thrower] ?? 0,
+    p.posY[thrower] ?? 0,
+    dirX,
+    dirY,
+    g.throwSpeed,
+    g.fuse,
+    inheritX,
+    inheritY,
   );
-  world.events.emit(SimEventType.GrenadeThrow, thrower, 0, p.posX[thrower] ?? 0, p.posY[thrower] ?? 0);
+  world.events.emit(
+    SimEventType.GrenadeThrow,
+    thrower,
+    0,
+    p.posX[thrower] ?? 0,
+    p.posY[thrower] ?? 0,
+  );
 }
 
 function spawnProjectile(

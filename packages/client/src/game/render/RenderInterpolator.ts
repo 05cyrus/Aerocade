@@ -14,6 +14,8 @@ export class RenderInterpolator {
   readonly prevAim = new Float32Array(MAX_PLAYERS);
   readonly currAim = new Float32Array(MAX_PLAYERS);
   readonly playerVisible = new Uint8Array(MAX_PLAYERS);
+  /** Set when a player (re)appears — respawn teleports must snap, not streak. */
+  readonly playerFresh = new Uint8Array(MAX_PLAYERS);
 
   readonly prevProjX = new Float64Array(MAX_PROJECTILES);
   readonly prevProjY = new Float64Array(MAX_PROJECTILES);
@@ -32,7 +34,9 @@ export class RenderInterpolator {
     this.currPlayerY.set(p.posY);
     this.currAim.set(p.aim);
     for (let i = 0; i < MAX_PLAYERS; i++) {
-      this.playerVisible[i] = p.connected[i] === 1 && p.status[i] === 1 ? 1 : 0;
+      const visible = p.connected[i] === 1 && p.status[i] === 1 ? 1 : 0;
+      this.playerFresh[i] = visible === 1 && this.playerVisible[i] === 0 ? 1 : 0;
+      this.playerVisible[i] = visible;
     }
 
     const pr = world.projectiles;
@@ -48,14 +52,17 @@ export class RenderInterpolator {
   }
 
   playerX(i: number, alpha: number): number {
+    if (this.playerFresh[i] === 1) return this.currPlayerX[i] ?? 0;
     return lerp(this.prevPlayerX[i] ?? 0, this.currPlayerX[i] ?? 0, alpha);
   }
 
   playerY(i: number, alpha: number): number {
+    if (this.playerFresh[i] === 1) return this.currPlayerY[i] ?? 0;
     return lerp(this.prevPlayerY[i] ?? 0, this.currPlayerY[i] ?? 0, alpha);
   }
 
   playerAim(i: number, alpha: number): number {
+    if (this.playerFresh[i] === 1) return this.currAim[i] ?? 0;
     // Angles are close between ticks; simple lerp with wrap handling.
     const a = this.prevAim[i] ?? 0;
     const b = this.currAim[i] ?? 0;

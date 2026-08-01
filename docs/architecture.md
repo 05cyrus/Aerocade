@@ -15,7 +15,7 @@ Aerocade is an original browser-based 2D side-view jetpack arena shooter, playab
 ### Non-goals
 
 - No internet matchmaking, accounts, persistence beyond local settings, or anti-cheat beyond host-side input validation.
-- No dedicated-server binary in scope (the shared sim is Node-capable by construction, so one remains *possible* later).
+- No dedicated-server binary in scope (the shared sim is Node-capable by construction, so one remains _possible_ later).
 - No general-purpose physics: AABBs vs. a static tile grid, rays, swept movement, and circle overlaps are the entire collision vocabulary (ADR-003).
 - No cross-machine lockstep determinism — the host is the single source of truth; prediction errors are reconciled (ADR-009).
 
@@ -29,11 +29,11 @@ graph LR
   server["packages/server<br/>LAN bridge (Node 20)"] --> shared
 ```
 
-| Package | Runs in | Depends on | Must never |
-| --- | --- | --- | --- |
+| Package  | Runs in                                                  | Depends on                      | Must never                                                                                  |
+| -------- | -------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------- |
 | `shared` | Host browser, client browsers (prediction), Node (tests) | **nothing** (zero runtime deps) | import DOM, Phaser, React, or Node built-ins; touch `Math.random`/`Date.now` inside the sim |
-| `client` | Browser | `shared` | put game rules in React or Phaser; enable Phaser physics |
-| `server` | Node 20 | `shared` (protocol types only) | simulate gameplay, inspect game state, or hold authority |
+| `client` | Browser                                                  | `shared`                        | put game rules in React or Phaser; enable Phaser physics                                    |
+| `server` | Node 20                                                  | `shared` (protocol types only)  | simulate gameplay, inspect game state, or hold authority                                    |
 
 The dependency rule is directional and absolute: `shared` imports nothing, `client` and `server` import `shared`, and `client`/`server` never import each other. ESLint enforces the boundary (`no-restricted-imports` denies `phaser`, `react`, and DOM globals inside `packages/shared`).
 
@@ -65,15 +65,15 @@ graph TB
   BRIDGE --> PROTO
 ```
 
-| Layer | Home | Responsibility |
-| --- | --- | --- |
-| Sim core | `shared/src/sim` | Fixed 60 Hz deterministic step; all gameplay rules; snapshot/restore |
-| Protocol | `shared/src/protocol` | Wire formats: input frames, delta snapshots, reliable events; bridge JSON messages |
-| Transports | `client/src/net/transport` | `Transport` interface with WebRTC and WS-relay implementations; the game never knows which is active |
-| Net client | `client/src/net` | Prediction, input-seq acking + replay, ~100 ms interpolation buffer, ≤120 ms extrapolation |
-| Rendering | `client/src/render` | Phaser scene reading interpolated sim state; no writes into sim |
-| UI shell | `client/src/ui` | React menus/HUD; talks to the game via a thin store, never to the sim directly |
-| Bridge | `server/src` | Serve built PWA at `http://<lan-ip>:8080`; `/ws` for `hello`, `room:create`, `room:list`, `room:join`, `signal`, `relay`, `error`, `pong` |
+| Layer      | Home                       | Responsibility                                                                                                                            |
+| ---------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Sim core   | `shared/src/sim`           | Fixed 60 Hz deterministic step; all gameplay rules; snapshot/restore                                                                      |
+| Protocol   | `shared/src/protocol`      | Wire formats: input frames, delta snapshots, reliable events; bridge JSON messages                                                        |
+| Transports | `client/src/net/transport` | `Transport` interface with WebRTC and WS-relay implementations; the game never knows which is active                                      |
+| Net client | `client/src/net`           | Prediction, input-seq acking + replay, ~100 ms interpolation buffer, ≤120 ms extrapolation                                                |
+| Rendering  | `client/src/render`        | Phaser scene reading interpolated sim state; no writes into sim                                                                           |
+| UI shell   | `client/src/ui`            | React menus/HUD; talks to the game via a thin store, never to the sim directly                                                            |
+| Bridge     | `server/src`               | Serve built PWA at `http://<lan-ip>:8080`; `/ws` for `hello`, `room:create`, `room:list`, `room:join`, `signal`, `relay`, `error`, `pong` |
 
 See [networking.md](networking.md) for transport and protocol detail, [rendering.md](rendering.md) and [ui.md](ui.md) for the client layers, [ecs.md](ecs.md) and [physics.md](physics.md) for the sim core.
 
@@ -190,18 +190,18 @@ aerocade/
 
 ## 7. Module responsibilities
 
-| Module | Owns | Never does |
-| --- | --- | --- |
-| `shared/math` | Deterministic vec/AABB ops, seeded `Rng` | Allocation in hot paths |
-| `shared/sim/world.ts` | All mutable game state in one value | Global/module-level mutable state |
-| `shared/sim/tuning.ts` + `combat/weapon-defs.ts` | Every constant (health 100, run 7.4 m/s, gravity 21 m/s², jetpack burn 46/s, all weapon values) | Magic numbers hiding in systems |
-| `shared/sim/systems/*` | Pure `(world) => void` gameplay rules | I/O, DOM, timers, randomness outside `world.rng` |
-| `shared/protocol` | Wire encode/decode, versioned message ids | Interpreting game rules |
-| `client/game` | Accumulator loop; local/host/client drivers | Physics math (delegates to `shared`) |
-| `client/net` | Prediction, reconciliation, interpolation | Trusting its own sim over host snapshots |
-| `client/render` | Drawing interpolated state | Mutating `SimWorld` |
-| `client/ui` | React DOM chrome | Direct sim access (goes through the game store) |
-| `server` | Hosting, rooms, signaling, relay | Reading game state; deciding anything about gameplay |
+| Module                                           | Owns                                                                                            | Never does                                           |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `shared/math`                                    | Deterministic vec/AABB ops, seeded `Rng`                                                        | Allocation in hot paths                              |
+| `shared/sim/world.ts`                            | All mutable game state in one value                                                             | Global/module-level mutable state                    |
+| `shared/sim/tuning.ts` + `combat/weapon-defs.ts` | Every constant (health 100, run 7.4 m/s, gravity 21 m/s², jetpack burn 46/s, all weapon values) | Magic numbers hiding in systems                      |
+| `shared/sim/systems/*`                           | Pure `(world) => void` gameplay rules                                                           | I/O, DOM, timers, randomness outside `world.rng`     |
+| `shared/protocol`                                | Wire encode/decode, versioned message ids                                                       | Interpreting game rules                              |
+| `client/game`                                    | Accumulator loop; local/host/client drivers                                                     | Physics math (delegates to `shared`)                 |
+| `client/net`                                     | Prediction, reconciliation, interpolation                                                       | Trusting its own sim over host snapshots             |
+| `client/render`                                  | Drawing interpolated state                                                                      | Mutating `SimWorld`                                  |
+| `client/ui`                                      | React DOM chrome                                                                                | Direct sim access (goes through the game store)      |
+| `server`                                         | Hosting, rooms, signaling, relay                                                                | Reading game state; deciding anything about gameplay |
 
 ## 8. Key invariants
 
@@ -222,16 +222,16 @@ aerocade/
 
 ## 10. Sibling documents
 
-| Doc | Covers |
-| --- | --- |
-| [DECISIONS.md](DECISIONS.md) | Authoritative ADRs and milestone plan |
-| [networking.md](networking.md) | Transports, protocol, prediction/reconciliation, lag compensation, bridge messages |
-| [physics.md](physics.md) | Tile collision, swept AABB, rays, explosions, movement/jetpack tuning |
-| [ecs.md](ecs.md) | Pools, components, systems, snapshot mechanics |
-| [rendering.md](rendering.md) | Phaser scene structure, interpolation, camera, VFX |
-| [ui.md](ui.md) | React shell, HUD, menus, input mapping (desktop/mobile/gamepad) |
-| [testing.md](testing.md) | Vitest/Playwright strategy, determinism tests, `npm run verify` |
-| [performance.md](performance.md) | Allocation budget, profiling, mid-range mobile targets |
-| [security.md](security.md) | LAN threat model, host-side input validation, bridge hardening |
-| [roadmap.md](roadmap.md) | M0–M8 milestones and mode/weapon rollout |
-| [../README.md](../README.md) | Quick start: run the bridge, join a game |
+| Doc                              | Covers                                                                             |
+| -------------------------------- | ---------------------------------------------------------------------------------- |
+| [DECISIONS.md](DECISIONS.md)     | Authoritative ADRs and milestone plan                                              |
+| [networking.md](networking.md)   | Transports, protocol, prediction/reconciliation, lag compensation, bridge messages |
+| [physics.md](physics.md)         | Tile collision, swept AABB, rays, explosions, movement/jetpack tuning              |
+| [ecs.md](ecs.md)                 | Pools, components, systems, snapshot mechanics                                     |
+| [rendering.md](rendering.md)     | Phaser scene structure, interpolation, camera, VFX                                 |
+| [ui.md](ui.md)                   | React shell, HUD, menus, input mapping (desktop/mobile/gamepad)                    |
+| [testing.md](testing.md)         | Vitest/Playwright strategy, determinism tests, `npm run verify`                    |
+| [performance.md](performance.md) | Allocation budget, profiling, mid-range mobile targets                             |
+| [security.md](security.md)       | LAN threat model, host-side input validation, bridge hardening                     |
+| [roadmap.md](roadmap.md)         | M0–M8 milestones and mode/weapon rollout                                           |
+| [../README.md](../README.md)     | Quick start: run the bridge, join a game                                           |

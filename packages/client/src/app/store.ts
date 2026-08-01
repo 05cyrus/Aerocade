@@ -78,6 +78,11 @@ export const appStore = {
   getState(): AppState {
     return state;
   },
+  /** Fresh-session state; called when a game session starts so nothing leaks between matches. */
+  reset(): void {
+    state = { ...state, hud: { ...initialHud }, killFeed: [] };
+    notify();
+  },
   setScreen(screen: Screen): void {
     state = { ...state, screen };
     notify();

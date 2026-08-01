@@ -53,8 +53,5 @@ function kill(world: SimWorld, victim: number, directSource: number): void {
     p.score[killer] = (p.score[killer] ?? 0) + TUNING.match.killScore;
   }
 
-  world.events.emit(
-    SimEventType.Death, victim, killer,
-    p.posX[victim] ?? 0, p.posY[victim] ?? 0,
-  );
+  world.events.emit(SimEventType.Death, victim, killer, p.posX[victim] ?? 0, p.posY[victim] ?? 0);
 }

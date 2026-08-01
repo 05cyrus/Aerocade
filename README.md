@@ -6,7 +6,7 @@ process; everyone else just opens a URL on their phone, tablet, or laptop and pl
 deterministic fixed-timestep simulation with client prediction, host-authoritative WebRTC
 networking, and an installable PWA shell.
 
-> **Originality and legal note.** Aerocade is inspired by the *feel* of 2014–2018 era jetpack arena
+> **Originality and legal note.** Aerocade is inspired by the _feel_ of 2014–2018 era jetpack arena
 > shooters, but it is an entirely original work: all code, art, audio, maps, weapon names and
 > tuning values, UI, and branding are created for this project. It contains no third-party game
 > assets and is not affiliated with, or derived from, any existing commercial title.
@@ -16,29 +16,29 @@ networking, and an installable PWA shell.
 
 Honest status per milestone (full plan in [docs/roadmap.md](docs/roadmap.md)):
 
-| Feature | Milestone | Status |
-| --- | --- | --- |
-| Deterministic 60 Hz sim core, ECS-lite pools, seeded RNG | M1 | Done |
-| Local sandbox: run/jump/jetpack (with hover), aim, shoot, damage, respawn | M1 | Done |
-| First map: **Foundry** (48×27 tile arena) + HUD | M1 | Done |
-| LAN bridge, room discovery, WebRTC DataChannels + WebSocket relay fallback | M2 | Done |
-| Client prediction, reconciliation, snapshot interpolation, Playwright e2e | M2 | Done |
-| Full weapon roster, grenades, melee, pickups, lag compensation | M3 | In progress (Arclight Beam and Emberjet land in M3) |
-| Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen | M4 | Planned |
-| Mobile twin-stick controls, Gamepad API, settings, generated audio | M5 | Planned |
-| PWA polish, more maps, moving platforms/jump pads, perf hardening | M6 | Planned |
-| AI opponents, Survival waves, Training mode | M7 | Planned |
-| Release hardening: soak tests, docs completion, packaging | M8 | Planned |
+| Feature                                                                    | Milestone | Status                                              |
+| -------------------------------------------------------------------------- | --------- | --------------------------------------------------- |
+| Deterministic 60 Hz sim core, ECS-lite pools, seeded RNG                   | M1        | Done                                                |
+| Local sandbox: run/jump/jetpack (with hover), aim, shoot, damage, respawn  | M1        | Done                                                |
+| First map: **Foundry** (48×27 tile arena) + HUD                            | M1        | Done                                                |
+| LAN bridge, room discovery, WebRTC DataChannels + WebSocket relay fallback | M2        | Done                                                |
+| Client prediction, reconciliation, snapshot interpolation, Playwright e2e  | M2        | Done                                                |
+| Full weapon roster, grenades, melee, pickups, lag compensation             | M3        | In progress (Arclight Beam and Emberjet land in M3) |
+| Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen     | M4        | Planned                                             |
+| Mobile twin-stick controls, Gamepad API, settings, generated audio         | M5        | Planned                                             |
+| PWA polish, more maps, moving platforms/jump pads, perf hardening          | M6        | Planned                                             |
+| AI opponents, Survival waves, Training mode                                | M7        | Planned                                             |
+| Release hardening: soak tests, docs completion, packaging                  | M8        | Planned                                             |
 
 ## Tech stack
 
-| Layer | Technology |
-| --- | --- |
-| Simulation | Hand-rolled deterministic fixed-timestep engine (TypeScript, zero deps, no DOM) — see [docs/physics.md](docs/physics.md), [docs/ecs.md](docs/ecs.md) |
-| Client | Vite 6 + React 19 (menus/HUD) + Phaser 3.87 (rendering only; Phaser physics disabled) — see [docs/rendering.md](docs/rendering.md), [docs/ui.md](docs/ui.md) |
-| Networking | Host-authoritative star over WebRTC DataChannels, WebSocket relay fallback — see [docs/networking.md](docs/networking.md) |
-| LAN bridge | Node 20 process: static PWA hosting + room discovery/signaling/relay; deliberately game-logic-free |
-| Quality | Strict TypeScript, ESLint, Prettier, Vitest, Playwright (from M2) — see [docs/testing.md](docs/testing.md) |
+| Layer      | Technology                                                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Simulation | Hand-rolled deterministic fixed-timestep engine (TypeScript, zero deps, no DOM) — see [docs/physics.md](docs/physics.md), [docs/ecs.md](docs/ecs.md)         |
+| Client     | Vite 6 + React 19 (menus/HUD) + Phaser 3.87 (rendering only; Phaser physics disabled) — see [docs/rendering.md](docs/rendering.md), [docs/ui.md](docs/ui.md) |
+| Networking | Host-authoritative star over WebRTC DataChannels, WebSocket relay fallback — see [docs/networking.md](docs/networking.md)                                    |
+| LAN bridge | Node 20 process: static PWA hosting + room discovery/signaling/relay; deliberately game-logic-free                                                           |
+| Quality    | Strict TypeScript, ESLint, Prettier, Vitest, Playwright (from M2) — see [docs/testing.md](docs/testing.md)                                                   |
 
 ## Quick start (development)
 
@@ -52,11 +52,11 @@ npm run verify    # typecheck + lint + tests + build — must be green before ev
 
 Workspace layout (npm workspaces monorepo):
 
-| Package | Path | Purpose |
-| --- | --- | --- |
+| Package            | Path              | Purpose                                                                                                                              |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `@aerocade/shared` | `packages/shared` | Deterministic sim, ECS-lite, protocol, math. Zero runtime deps, no DOM. Runs identically in host browser, client browsers, and Node. |
-| `@aerocade/client` | `packages/client` | The PWA. React owns DOM UI, Phaser owns the canvas. Depends on `shared`. |
-| `@aerocade/server` | `packages/server` | The LAN bridge: serves the built PWA and a WebSocket at `/ws` for rooms/signaling/relay. Depends on `shared`. |
+| `@aerocade/client` | `packages/client` | The PWA. React owns DOM UI, Phaser owns the canvas. Depends on `shared`.                                                             |
+| `@aerocade/server` | `packages/server` | The LAN bridge: serves the built PWA and a WebSocket at `/ws` for rooms/signaling/relay. Depends on `shared`.                        |
 
 Architecture overview: [docs/architecture.md](docs/architecture.md).
 
@@ -81,7 +81,7 @@ What the bridge does — and deliberately does not do:
 
 - Serves the built PWA at `http://<lan-ip>:8080` to every device on the network.
 - Hosts a WebSocket at `/ws` for room discovery, WebRTC signaling, and message relay fallback.
-- Runs **zero game logic**. The *host player's browser* owns the authoritative simulation, so any
+- Runs **zero game logic**. The _host player's browser_ owns the authoritative simulation, so any
   phone or laptop can be the game host; the bridge is just the meeting point browsers cannot
   provide themselves (browsers cannot listen on sockets, broadcast, or query mDNS — ADR-006).
 
@@ -115,13 +115,13 @@ flowchart LR
 
 ### Troubleshooting
 
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| Page loads but nobody can join / rooms never appear | Access point **client isolation** (common on guest/office Wi-Fi) blocks device-to-device traffic | Use a phone hotspot or a home router; disable "AP/client isolation" if you control the AP |
-| Other devices cannot open the URL at all | OS firewall on the bridge machine blocks inbound **port 8080** | Allow inbound TCP 8080 (e.g. `ufw allow 8080/tcp`), or run the bridge on an open port via `PORT=` |
+| Symptom                                                    | Cause                                                                                                | Fix                                                                                                                                          |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page loads but nobody can join / rooms never appear        | Access point **client isolation** (common on guest/office Wi-Fi) blocks device-to-device traffic     | Use a phone hotspot or a home router; disable "AP/client isolation" if you control the AP                                                    |
+| Other devices cannot open the URL at all                   | OS firewall on the bridge machine blocks inbound **port 8080**                                       | Allow inbound TCP 8080 (e.g. `ufw allow 8080/tcp`), or run the bridge on an open port via `PORT=`                                            |
 | iOS: plays in Safari, but offline install features missing | iOS treats plain-HTTP LAN origins as insecure; service-worker features are restricted over `http://` | Play in the Safari tab (fully supported); install the PWA from `http://localhost:8080` on a machine running the bridge for full offline mode |
-| Game ends when one specific player leaves | That player was the **host**; host migration is **not supported in v1** | Have the most stable device/browser create the room; restart the room if the host drops |
-| Joins work but gameplay is choppy for one player | WebRTC failed for that client; they are on the WebSocket relay fallback | Expected degradation path — playable on LAN; check AP isolation to restore direct RTC |
+| Game ends when one specific player leaves                  | That player was the **host**; host migration is **not supported in v1**                              | Have the most stable device/browser create the room; restart the room if the host drops                                                      |
+| Joins work but gameplay is choppy for one player           | WebRTC failed for that client; they are on the WebSocket relay fallback                              | Expected degradation path — playable on LAN; check AP isolation to restore direct RTC                                                        |
 
 ## PWA installation and offline play
 
@@ -143,43 +143,45 @@ Offline capabilities, precisely:
 
 ### Desktop
 
-| Input | Action |
-| --- | --- |
-| `W A S D` | Move |
-| Mouse | Aim |
-| Left mouse button | Shoot |
-| Right mouse button | Melee (Spanner Strike) |
-| `Space` | Jetpack |
-| `G` | Throw frag grenade |
-| `R` | Reload |
-| `Q` | Switch weapon |
-| `Tab` | Scoreboard |
-| `Esc` | Pause |
+| Input                     | Action                                        |
+| ------------------------- | --------------------------------------------- |
+| `A` / `D`                 | Move                                          |
+| `Space`                   | Jump; hold for jetpack                        |
+| `S` + `Space`             | Hover (altitude hold, cheaper fuel — ADR-011) |
+| `Shift`                   | Walk                                          |
+| Mouse                     | Aim                                           |
+| Left mouse button         | Fire                                          |
+| `F` or right mouse button | Melee (Spanner Strike)                        |
+| `G`                       | Throw frag grenade                            |
+| `R`                       | Reload                                        |
+| `Q`                       | Switch weapon                                 |
+| `Tab`                     | Scoreboard (planned, M4)                      |
+| `Esc`                     | Pause (planned, M5)                           |
 
 ### Mobile (twin virtual sticks, M5)
 
-| Input | Action |
-| --- | --- |
-| Left stick | Move |
-| Right stick | Aim; fires automatically once pushed past the deadzone threshold |
-| Jetpack button | Jetpack |
-| Grenade button | Throw frag grenade |
-| Reload button | Reload |
-| Switch button | Switch weapon |
-| Melee button | Melee (Spanner Strike) |
+| Input          | Action                                                           |
+| -------------- | ---------------------------------------------------------------- |
+| Left stick     | Move                                                             |
+| Right stick    | Aim; fires automatically once pushed past the deadzone threshold |
+| Jetpack button | Jetpack                                                          |
+| Grenade button | Throw frag grenade                                               |
+| Reload button  | Reload                                                           |
+| Switch button  | Switch weapon                                                    |
+| Melee button   | Melee (Spanner Strike)                                           |
 
 ### Gamepad (Gamepad API, standard mapping, M5)
 
-| Input | Action |
-| --- | --- |
-| Left stick | Move |
-| Right stick | Aim |
-| Right trigger | Shoot |
-| Left trigger | Jetpack |
-| Right bumper | Melee |
-| Left bumper | Grenade |
-| `X` / `Y` | Reload / switch weapon |
-| Select / Start | Scoreboard / pause |
+| Input          | Action                 |
+| -------------- | ---------------------- |
+| Left stick     | Move                   |
+| Right stick    | Aim                    |
+| Right trigger  | Shoot                  |
+| Left trigger   | Jetpack                |
+| Right bumper   | Melee                  |
+| Left bumper    | Grenade                |
+| `X` / `Y`      | Reload / switch weapon |
+| Select / Start | Scoreboard / pause     |
 
 ## Deployment guide
 
@@ -191,9 +193,9 @@ Offline capabilities, precisely:
 
 Configuration is by environment variable:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `PORT` | `8080` | HTTP + WebSocket listen port for the bridge |
+| Variable | Default | Purpose                                     |
+| -------- | ------- | ------------------------------------------- |
+| `PORT`   | `8080`  | HTTP + WebSocket listen port for the bridge |
 
 To keep a bridge running permanently on a spare machine (e.g. a living-room mini PC), a minimal
 systemd unit:
@@ -223,19 +225,19 @@ room. Performance budgets and tuning targets: [docs/performance.md](docs/perform
 
 ## Documentation
 
-| Doc | Contents |
-| --- | --- |
-| [docs/architecture.md](docs/architecture.md) | System overview, package boundaries, data flow |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture decision record — the source of truth |
-| [docs/ecs.md](docs/ecs.md) | ECS-lite: pools, components, system order |
-| [docs/physics.md](docs/physics.md) | Fixed-timestep physics, AABB/tile collision, tuning |
-| [docs/networking.md](docs/networking.md) | Transports, protocol, prediction/reconciliation, lag compensation |
-| [docs/rendering.md](docs/rendering.md) | Phaser integration, interpolation, camera |
-| [docs/ui.md](docs/ui.md) | React shell, HUD, menus, input mapping |
-| [docs/testing.md](docs/testing.md) | Vitest/Playwright strategy, determinism tests |
-| [docs/performance.md](docs/performance.md) | Budgets, zero-allocation rules, profiling |
-| [docs/security.md](docs/security.md) | LAN threat model, input validation, no-internet posture |
-| [docs/roadmap.md](docs/roadmap.md) | Milestones M0–M8 in detail |
+| Doc                                          | Contents                                                          |
+| -------------------------------------------- | ----------------------------------------------------------------- |
+| [docs/architecture.md](docs/architecture.md) | System overview, package boundaries, data flow                    |
+| [docs/DECISIONS.md](docs/DECISIONS.md)       | Architecture decision record — the source of truth                |
+| [docs/ecs.md](docs/ecs.md)                   | ECS-lite: pools, components, system order                         |
+| [docs/physics.md](docs/physics.md)           | Fixed-timestep physics, AABB/tile collision, tuning               |
+| [docs/networking.md](docs/networking.md)     | Transports, protocol, prediction/reconciliation, lag compensation |
+| [docs/rendering.md](docs/rendering.md)       | Phaser integration, interpolation, camera                         |
+| [docs/ui.md](docs/ui.md)                     | React shell, HUD, menus, input mapping                            |
+| [docs/testing.md](docs/testing.md)           | Vitest/Playwright strategy, determinism tests                     |
+| [docs/performance.md](docs/performance.md)   | Budgets, zero-allocation rules, profiling                         |
+| [docs/security.md](docs/security.md)         | LAN threat model, input validation, no-internet posture           |
+| [docs/roadmap.md](docs/roadmap.md)           | Milestones M0–M8 in detail                                        |
 
 ## Contributing
 

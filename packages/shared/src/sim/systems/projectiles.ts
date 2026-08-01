@@ -7,6 +7,11 @@ import { pointToAabbDistance } from '../geometry.js';
 import { TUNING } from '../tuning.js';
 import { ProjectileKind, type SimWorld } from '../world.js';
 
+/** Below this impact speed a bounce silently settles instead of reflecting. */
+const SETTLE_SPEED = 0.8;
+/** How far beneath a projectile to probe for the surface it rests on. */
+const SETTLE_PROBE = 0.05;
+
 /**
  * Projectile flight, bounce, fuse, and impact. Projectiles are points moving
  * axis-separated against the tile grid (speeds stay below one tile per tick,
@@ -36,12 +41,6 @@ export function projectilesSystem(world: SimWorld): void {
       continue;
     }
 
-    // --- Ballistics ---
-    const gravityFactor = isGrenade ? g.gravityFactor : (def?.gravityFactor ?? 0);
-    if (gravityFactor > 0) {
-      pr.velY[i] = (pr.velY[i] ?? 0) + TUNING.player.gravity * gravityFactor * SIM_DT;
-    }
-
     let posX = pr.posX[i] ?? 0;
     let posY = pr.posY[i] ?? 0;
     let velX = pr.velX[i] ?? 0;
@@ -49,16 +48,32 @@ export function projectilesSystem(world: SimWorld): void {
     const detonateOnImpact = isGrenade ? false : (def?.detonateOnImpact ?? true);
     let exploded = false;
 
+    // --- Ballistics ---
+    // A settled grenade (velY zeroed, floor directly beneath) stops feeling
+    // gravity; otherwise the 0.35 m/s per-tick pull re-collides it every tick
+    // and each contact spams a bounce event (review finding, M1).
+    const gravityFactor = isGrenade ? g.gravityFactor : (def?.gravityFactor ?? 0);
+    const resting =
+      velY === 0 && isSolid(world.map, Math.floor(posX), Math.floor(posY + SETTLE_PROBE));
+    if (gravityFactor > 0 && !resting) {
+      velY += TUNING.player.gravity * gravityFactor * SIM_DT;
+    }
+    if (resting && Math.abs(velX) < SETTLE_SPEED) velX = 0;
+
     // X axis
     const nextX = posX + velX * SIM_DT;
-    if (isSolid(world.map, Math.floor(nextX), Math.floor(posY))) {
+    if (velX !== 0 && isSolid(world.map, Math.floor(nextX), Math.floor(posY))) {
       if (detonateOnImpact) {
         detonate(world, i);
         exploded = true;
       } else {
+        const impactSpeed = Math.abs(velX);
         velX = -velX * g.restitution;
         velY *= g.bounceFriction;
-        world.events.emit(SimEventType.GrenadeBounce, i, 0, posX, posY);
+        if (Math.abs(velX) < SETTLE_SPEED) velX = 0;
+        if (impactSpeed >= SETTLE_SPEED) {
+          world.events.emit(SimEventType.GrenadeBounce, i, 0, posX, posY);
+        }
       }
     } else {
       posX = nextX;
@@ -67,16 +82,19 @@ export function projectilesSystem(world: SimWorld): void {
 
     // Y axis
     const nextY = posY + velY * SIM_DT;
-    if (isSolid(world.map, Math.floor(posX), Math.floor(nextY))) {
+    if (velY !== 0 && isSolid(world.map, Math.floor(posX), Math.floor(nextY))) {
       if (detonateOnImpact) {
         detonate(world, i);
         exploded = true;
       } else {
+        const impactSpeed = Math.abs(velY);
         velY = -velY * g.restitution;
         velX *= g.bounceFriction;
         // Settle instead of micro-bouncing forever.
-        if (Math.abs(velY) < 0.8) velY = 0;
-        world.events.emit(SimEventType.GrenadeBounce, i, 0, posX, posY);
+        if (Math.abs(velY) < SETTLE_SPEED) velY = 0;
+        if (impactSpeed >= SETTLE_SPEED) {
+          world.events.emit(SimEventType.GrenadeBounce, i, 0, posX, posY);
+        }
       }
     } else {
       posY = nextY;

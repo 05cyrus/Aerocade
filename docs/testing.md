@@ -18,13 +18,13 @@ graph BT
     D["Manual playtest checklist<br/>feel, visuals, audio, device matrix"]
 ```
 
-| Layer | Runner | Environment | Speed | When it runs |
-|---|---|---|---|---|
-| Shared sim unit | Vitest | Node (pure) | < 5 s total | Every save, `npm run verify`, CI |
-| Client unit | Vitest | jsdom | < 10 s | `npm run verify`, CI |
-| Bridge unit/integration | Vitest | Node + real WS | < 15 s | `npm run verify`, CI |
-| e2e | Playwright | Chromium, real bridge | ~1 min | M2 onward, CI + pre-release |
-| Manual checklist | Humans | Real devices | — | Every milestone exit |
+| Layer                   | Runner     | Environment           | Speed       | When it runs                     |
+| ----------------------- | ---------- | --------------------- | ----------- | -------------------------------- |
+| Shared sim unit         | Vitest     | Node (pure)           | < 5 s total | Every save, `npm run verify`, CI |
+| Client unit             | Vitest     | jsdom                 | < 10 s      | `npm run verify`, CI             |
+| Bridge unit/integration | Vitest     | Node + real WS        | < 15 s      | `npm run verify`, CI             |
+| e2e                     | Playwright | Chromium, real bridge | ~1 min      | M2 onward, CI + pre-release      |
+| Manual checklist        | Humans     | Real devices          | —           | Every milestone exit             |
 
 The pyramid is deliberately bottom-heavy. The sim is where correctness bugs are catastrophic
 (desync, rubber-banding, unfair hits) and where they are also cheapest to catch: no browser, no
@@ -40,19 +40,19 @@ No mocking is needed because the sim has nothing to mock — that is the point o
 The custom physics core (see [physics.md](physics.md)) replaces Matter.js, so we own its
 correctness. Tests assert invariants rather than magic positions:
 
-| Invariant | Test approach |
-|---|---|
-| No tunneling | Fire the fastest mover (Thumper rocket, 24 m/s = 0.4 m/tick) and a player at max fall speed (26 m/s ≈ 0.43 m/tick) at a 1-tile-thin wall/floor from many offsets; assert the swept AABB/ray never ends up inside or past a solid tile. |
-| Corner resolution | Drive the 0.85 × 1.65 m player AABB diagonally into inner and outer tile corners; assert no jitter oscillation across ticks, no penetration, and axis-correct velocity zeroing. |
-| Ceiling/floor contact | Jump (8.6 m/s) under a low ceiling: vertical velocity clamps to 0 on contact, never reflects. |
-| Max fall clamp | Free-fall from height: `vy` never exceeds 26 m/s regardless of tick count. |
-| Rest stability | A grounded, idle player stays bit-identical in position for 600 ticks (no micro-sliding from friction/gravity interplay). |
-| Explosion overlap | Circle-vs-AABB queries (Thumper r=3.2, Lobber r=2.8, Frag r=3.4) tested at edge/corner tangency — inclusive/exclusive boundary behavior is pinned by test, not by accident. |
+| Invariant             | Test approach                                                                                                                                                                                                                          |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No tunneling          | Fire the fastest mover (Thumper rocket, 24 m/s = 0.4 m/tick) and a player at max fall speed (26 m/s ≈ 0.43 m/tick) at a 1-tile-thin wall/floor from many offsets; assert the swept AABB/ray never ends up inside or past a solid tile. |
+| Corner resolution     | Drive the 0.85 × 1.65 m player AABB diagonally into inner and outer tile corners; assert no jitter oscillation across ticks, no penetration, and axis-correct velocity zeroing.                                                        |
+| Ceiling/floor contact | Jump (8.6 m/s) under a low ceiling: vertical velocity clamps to 0 on contact, never reflects.                                                                                                                                          |
+| Max fall clamp        | Free-fall from height: `vy` never exceeds 26 m/s regardless of tick count.                                                                                                                                                             |
+| Rest stability        | A grounded, idle player stays bit-identical in position for 600 ticks (no micro-sliding from friction/gravity interplay).                                                                                                              |
+| Explosion overlap     | Circle-vs-AABB queries (Thumper r=3.2, Lobber r=2.8, Frag r=3.4) tested at edge/corner tangency — inclusive/exclusive boundary behavior is pinned by test, not by accident.                                                            |
 
 ### Movement, jetpack, and fuel timing
 
 Tuning constants come from `sim/tuning.ts`; tests reference them symbolically so a deliberate
-retune doesn't break tests, while timing *relationships* are pinned exactly:
+retune doesn't break tests, while timing _relationships_ are pinned exactly:
 
 - Ground run reaches 7.4 m/s under 55 m/s² accel; air accel capped at 26 m/s²; friction 48
   decays to rest without sign flip-flop.
@@ -86,10 +86,10 @@ Weapon math (see roster in [../README.md](../README.md) and defs in
 ### Damage, knockback, respawn
 
 - Damage tables: direct hits apply listed damage; splash scales with distance (Thumper 40 direct
-  + up to 55 splash asserted at epicenter and at r=3.2 edge → 0).
+  - up to 55 splash asserted at epicenter and at r=3.2 edge → 0).
 - Knockback vectors point away from the impulse source; Longbolt and Frag apply their high
   knockback values; a self-aimed Thumper at the floor produces upward velocity (the rocket-jump
-  contract — this is a *feature test*, not incidental).
+  contract — this is a _feature test_, not incidental).
 - Kill → corpse cleanup → respawn exactly `3 s / SIM_DT` ticks later at a spawn point, with
   health 100, spawn protection 2.5 s, and protection cleared early by firing.
 - Melee Spanner Strike: hits only within the 1.3 m arc, respects the 0.5 s cycle.
@@ -122,14 +122,14 @@ was computed from reproduces the source snapshot exactly.
 ## Determinism regression pattern
 
 The single most valuable test in the repo. ADR-009's rules (seeded mulberry32, no wall clock,
-ascending-index iteration) are enforced by construction, then *verified* by replay:
+ascending-index iteration) are enforced by construction, then _verified_ by replay:
 
 ```ts
 test('sim is deterministic for a fixed seed and input script', () => {
   const script = recordedInputScript; // checked-in: 8 players, 1800 ticks of varied inputs
-  const hashA = hashWorld(runSim(createWorld({ seed: 0xC0FFEE, map: 'foundry' }), script));
-  const hashB = hashWorld(runSim(createWorld({ seed: 0xC0FFEE, map: 'foundry' }), script));
-  expect(hashA).toBe(hashB);                 // replay-stable
+  const hashA = hashWorld(runSim(createWorld({ seed: 0xc0ffee, map: 'foundry' }), script));
+  const hashB = hashWorld(runSim(createWorld({ seed: 0xc0ffee, map: 'foundry' }), script));
+  expect(hashA).toBe(hashB); // replay-stable
   expect(hashA).toBe(GOLDEN_HASHES.foundry); // regression-stable across commits
 });
 ```
@@ -138,11 +138,11 @@ test('sim is deterministic for a fixed seed and input script', () => {
   order-stable.
 - The checked-in **golden hash** turns any accidental nondeterminism (a stray `Math.random`, an
   object-key iteration, a reordered system) into a red test with a one-line diff.
-- When a *deliberate* tuning or logic change lands, the golden hash is updated in the same commit
+- When a _deliberate_ tuning or logic change lands, the golden hash is updated in the same commit
   — the diff makes the behavioral change explicit in review.
 - Input scripts are recorded from real play in the M1 sandbox and stored as compact JSON; several
   scripts cover movement-heavy, combat-heavy, and explosion-heavy profiles.
-- Per ADR-009 this asserts *practical* determinism (same engine replaying its own inputs — what
+- Per ADR-009 this asserts _practical_ determinism (same engine replaying its own inputs — what
   prediction/reconciliation needs), not cross-machine lockstep.
 
 ## Client unit tests (Vitest + jsdom, `packages/client`)
@@ -157,7 +157,7 @@ Phaser is never imported in these tests. Targets are the pure/DOM-light client l
   machine transitions (idle → discovering → joining → connected → dropped).
 - **HUD logic:** pure selectors that derive HUD view-model from sim state — health/fuel bar
   fractions, ammo and reload progress, killfeed ordering, scoreboard sort, respawn countdown.
-  Rendering of those values is *not* asserted (see below).
+  Rendering of those values is _not_ asserted (see below).
 
 ## Bridge server tests (Vitest, `packages/server`)
 
@@ -192,7 +192,7 @@ The M2 suite, in order of value:
    (`window.__aerocade.debugState()`) and assert host and client agree on player positions within
    the interpolation-buffer tolerance.
 4. **Kill registers end-to-end:** context A fires at context B's known position; assert B's death
-   event, A's score increment on *both* scoreboards, and B's respawn after 3 s.
+   event, A's score increment on _both_ scoreboards, and B's respawn after 3 s.
 5. **Disruption (M2 stretch):** drop the client's transport mid-match and assert the fallback or
    rejoin path recovers without a host crash.
 
@@ -222,13 +222,13 @@ bench('foundry, 8 players, combat-heavy script', () => {
 
 ## Deliberately not unit tested
 
-| Area | Why not | Covered instead by |
-|---|---|---|
-| Phaser rendering internals | Third-party, canvas/WebGL, no DOM in jsdom; mocking Phaser tests the mock | Manual checklist + e2e smoke (canvas exists, no console errors) |
-| Visual output (sprites, particles, screen shake) | Pixel assertions are flaky and freeze art iteration | Manual playtest checklist per milestone |
-| Audio | Web Audio unavailable headless; "sounds right" is human judgment | Manual checklist (M5) |
-| Real device input feel (touch latency, stick ergonomics) | Emulation lies about touch | Device-matrix playtest (M5) |
-| Real Wi-Fi behavior (AP isolation, roaming) | Not reproducible in CI | Documented manual LAN test in [networking.md](networking.md) |
+| Area                                                     | Why not                                                                   | Covered instead by                                              |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Phaser rendering internals                               | Third-party, canvas/WebGL, no DOM in jsdom; mocking Phaser tests the mock | Manual checklist + e2e smoke (canvas exists, no console errors) |
+| Visual output (sprites, particles, screen shake)         | Pixel assertions are flaky and freeze art iteration                       | Manual playtest checklist per milestone                         |
+| Audio                                                    | Web Audio unavailable headless; "sounds right" is human judgment          | Manual checklist (M5)                                           |
+| Real device input feel (touch latency, stick ergonomics) | Emulation lies about touch                                                | Device-matrix playtest (M5)                                     |
+| Real Wi-Fi behavior (AP isolation, roaming)              | Not reproducible in CI                                                    | Documented manual LAN test in [networking.md](networking.md)    |
 
 Each milestone exit includes a written **manual playtest checklist** (kept beside this doc):
 movement feel at 60/144 Hz displays, jetpack/hover behavior, rocket-jump feel, every weapon's

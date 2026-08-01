@@ -1,17 +1,23 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { WebSocketServer, WebSocket } from 'ws';
-import { RoomRegistry } from './rooms.js';
+import { MAX_PEERS, RoomRegistry } from './rooms.js';
 import { serveStatic } from './static-files.js';
 
-const SWEEP_INTERVAL_MS = 5000;
 /** Sockets that never complete a hello are dropped after this long. */
 const HANDSHAKE_TIMEOUT_MS = 10_000;
+/**
+ * Liveness heartbeat. A half-open socket (peer walked out of Wi-Fi range)
+ * never emits 'close' on its own; without pings a dead host would pin its
+ * room forever. Two missed pongs = terminated, which fires 'close' and runs
+ * the normal room-cleanup path.
+ */
+const HEARTBEAT_INTERVAL_MS = 30_000;
+/** Upper bound on one WS frame; larger is hostile, not gameplay (docs/security.md). */
+const MAX_WS_PAYLOAD_BYTES = 128 * 1024;
 
 export interface BridgeDeps {
   staticDir: string;
-  createHttpServer: (
-    listener: (req: IncomingMessage, res: ServerResponse) => void,
-  ) => Server;
+  createHttpServer: (listener: (req: IncomingMessage, res: ServerResponse) => void) => Server;
   WebSocketServerImpl: typeof WebSocketServer;
 }
 
@@ -40,14 +46,26 @@ export function createBridge(deps: BridgeDeps): Bridge {
     serveStatic(deps.staticDir, req, res);
   });
 
-  const wss = new deps.WebSocketServerImpl({ server: httpServer, path: '/ws' });
+  const wss = new deps.WebSocketServerImpl({
+    server: httpServer,
+    path: '/ws',
+    maxPayload: MAX_WS_PAYLOAD_BYTES,
+  });
+
+  const alive = new WeakMap<WebSocket, boolean>();
 
   wss.on('connection', (ws: WebSocket) => {
+    if (registry.peerCount >= MAX_PEERS) {
+      ws.close(4001, 'bridge full');
+      return;
+    }
     const peer = registry.addPeer(ws);
+    alive.set(ws, true);
     const handshakeTimer = setTimeout(() => {
       if (!peer.saidHello) ws.close(4000, 'hello timeout');
     }, HANDSHAKE_TIMEOUT_MS);
 
+    ws.on('pong', () => alive.set(ws, true));
     ws.on('message', (data: Buffer | ArrayBuffer | Buffer[], isBinary: boolean) => {
       if (isBinary) return; // bridge control channel is JSON-only
       registry.handleRaw(peer, rawToUtf8(data));
@@ -61,16 +79,23 @@ export function createBridge(deps: BridgeDeps): Bridge {
     });
   });
 
-  const sweeper = setInterval(() => {
-    registry.sweep();
-  }, SWEEP_INTERVAL_MS);
-  sweeper.unref();
+  const heartbeat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (alive.get(ws) === false) {
+        ws.terminate(); // fires 'close' → removePeer → room cleanup
+        continue;
+      }
+      alive.set(ws, false);
+      ws.ping();
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+  heartbeat.unref();
 
   return {
     httpServer,
     registry,
     close: (): void => {
-      clearInterval(sweeper);
+      clearInterval(heartbeat);
       wss.close();
       httpServer.close();
     },

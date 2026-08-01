@@ -97,7 +97,13 @@ describe('rooms', () => {
   it('create, list, join, and notify the host', async () => {
     const hostWs = await connect();
     await hello(hostWs);
-    send(hostWs, { t: 'room:create', name: 'Test Arena', hostName: 'Hosty', mode: 'ffa', mapId: 'foundry' });
+    send(hostWs, {
+      t: 'room:create',
+      name: 'Test Arena',
+      hostName: 'Hosty',
+      mode: 'ffa',
+      mapId: 'foundry',
+    });
     const created = await nextMessage(hostWs);
     if (created.t !== 'room:created') throw new Error('expected room:created');
     expect(created.room).toMatchObject({ name: 'Test Arena', players: 1, mapId: 'foundry' });
@@ -120,6 +126,25 @@ describe('rooms', () => {
     });
   });
 
+  it('a host re-joining their own room is idempotent (room survives)', async () => {
+    const hostWs = await connect();
+    await hello(hostWs);
+    send(hostWs, { t: 'room:create', name: 'Mine', hostName: 'H', mode: 'ffa', mapId: 'foundry' });
+    const created = await nextMessage(hostWs);
+    if (created.t !== 'room:created') throw new Error('expected room:created');
+
+    send(hostWs, { t: 'room:join', roomId: created.room.id, playerName: 'H' });
+    const rejoined = await nextMessage(hostWs);
+    expect(rejoined).toMatchObject({ t: 'room:joined' });
+    expect(bridge.registry.roomCount).toBe(1);
+
+    // The room is still joinable by someone else afterwards.
+    const otherWs = await connect();
+    await hello(otherWs);
+    send(otherWs, { t: 'room:join', roomId: created.room.id, playerName: 'O' });
+    expect(await nextMessage(otherWs)).toMatchObject({ t: 'room:joined' });
+  });
+
   it('joining a missing or full room fails cleanly', async () => {
     const ws = await connect();
     await hello(ws);
@@ -130,7 +155,13 @@ describe('rooms', () => {
   it('host disconnect closes the room for members', async () => {
     const hostWs = await connect();
     await hello(hostWs);
-    send(hostWs, { t: 'room:create', name: 'Doomed', hostName: 'H', mode: 'ffa', mapId: 'foundry' });
+    send(hostWs, {
+      t: 'room:create',
+      name: 'Doomed',
+      hostName: 'H',
+      mode: 'ffa',
+      mapId: 'foundry',
+    });
     const created = await nextMessage(hostWs);
     if (created.t !== 'room:created') throw new Error('expected room:created');
 
@@ -180,5 +211,23 @@ describe('signaling and relay', () => {
     await hello(outsiderWs);
     send(outsiderWs, { t: 'signal', to: hostId, data: {} });
     expect(await nextMessage(outsiderWs)).toMatchObject({ t: 'error', code: 'not-in-room' });
+  });
+
+  it('rejects oversized relay payloads instead of forwarding them', async () => {
+    const hostWs = await connect();
+    const hostId = await hello(hostWs);
+    send(hostWs, { t: 'room:create', name: 'R', hostName: 'H', mode: 'ffa', mapId: 'foundry' });
+    const created = await nextMessage(hostWs);
+    if (created.t !== 'room:created') throw new Error('expected room:created');
+
+    const peerWs = await connect();
+    await hello(peerWs);
+    const hostSeesJoin = nextMessage(hostWs);
+    send(peerWs, { t: 'room:join', roomId: created.room.id, playerName: 'P' });
+    await nextMessage(peerWs); // room:joined
+    await hostSeesJoin;
+
+    send(peerWs, { t: 'relay', to: hostId, payload: 'A'.repeat(20 * 1024) });
+    expect(await nextMessage(peerWs)).toMatchObject({ t: 'error', code: 'bad-message' });
   });
 });

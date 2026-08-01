@@ -21,7 +21,11 @@ body,
   overflow: hidden;
   background: var(--ac-bg);
   color: var(--ac-text);
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
@@ -54,8 +58,7 @@ body,
   gap: 12px;
   background:
     radial-gradient(ellipse at 30% 20%, rgba(60, 214, 255, 0.08), transparent 60%),
-    radial-gradient(ellipse at 70% 80%, rgba(255, 160, 60, 0.08), transparent 60%),
-    var(--ac-bg);
+    radial-gradient(ellipse at 70% 80%, rgba(255, 160, 60, 0.08), transparent 60%), var(--ac-bg);
 }
 
 .menu h1 {

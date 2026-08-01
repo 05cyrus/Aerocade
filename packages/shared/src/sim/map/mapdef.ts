@@ -45,7 +45,9 @@ export function parseAsciiMap(id: string, name: string, rows: readonly string[])
   for (let y = 0; y < height; y++) {
     const row = rows[y];
     if (row?.length !== width) {
-      throw new Error(`map ${id}: row ${String(y)} has length ${String(row?.length)}, expected ${String(width)}`);
+      throw new Error(
+        `map ${id}: row ${String(y)} has length ${String(row?.length)}, expected ${String(width)}`,
+      );
     }
     for (let x = 0; x < width; x++) {
       const ch = row[x];
@@ -60,7 +62,9 @@ export function parseAsciiMap(id: string, name: string, rows: readonly string[])
   }
 
   if (spawnPoints.length < 2) {
-    throw new Error(`map ${id}: needs at least 2 spawn points, found ${String(spawnPoints.length)}`);
+    throw new Error(
+      `map ${id}: needs at least 2 spawn points, found ${String(spawnPoints.length)}`,
+    );
   }
 
   return { id, name, width, height, solid, spawnPoints };

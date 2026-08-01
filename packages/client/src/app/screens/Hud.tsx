@@ -51,7 +51,8 @@ export function Hud(): ReactElement {
         <div className="killfeed">
           {killFeed.map((e) => (
             <div className="entry" key={e.id}>
-              <span className="killer">{e.killer}</span> ⚡ <span className="victim">{e.victim}</span>
+              <span className="killer">{e.killer}</span> ⚡{' '}
+              <span className="victim">{e.victim}</span>
             </div>
           ))}
         </div>

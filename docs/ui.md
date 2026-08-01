@@ -12,14 +12,14 @@ layer, settings persistence, the join flow, and the accessibility baseline.
 
 We deliberately render zero UI inside the Phaser canvas:
 
-| Concern | DOM/React | In-canvas UI |
-| --- | --- | --- |
-| Text layout, wrapping, i18n-ready fonts | Free (browser layout engine) | Hand-rolled bitmap/text metrics |
-| Touch targets, focus, keyboard navigation | Native semantics, `:focus-visible` | Reimplement hit testing + focus |
-| Accessibility (screen readers, zoom, contrast) | ARIA + real elements | Effectively opaque |
-| Safe-area insets on notched phones | `env(safe-area-inset-*)` CSS | Manual viewport math |
-| Iteration speed | HMR via Vite, CSS | Recompile scene layout code |
-| Cost when idle | Zero draw calls to the game | UI competes with game batching |
+| Concern                                        | DOM/React                          | In-canvas UI                    |
+| ---------------------------------------------- | ---------------------------------- | ------------------------------- |
+| Text layout, wrapping, i18n-ready fonts        | Free (browser layout engine)       | Hand-rolled bitmap/text metrics |
+| Touch targets, focus, keyboard navigation      | Native semantics, `:focus-visible` | Reimplement hit testing + focus |
+| Accessibility (screen readers, zoom, contrast) | ARIA + real elements               | Effectively opaque              |
+| Safe-area insets on notched phones             | `env(safe-area-inset-*)` CSS       | Manual viewport math            |
+| Iteration speed                                | HMR via Vite, CSS                  | Recompile scene layout code     |
+| Cost when idle                                 | Zero draw calls to the game        | UI competes with game batching  |
 
 The canvas draws the world; DOM draws everything about the world. The one rule that keeps this
 cheap: **React must never re-render at frame rate** (§4). Forms, lists, and QR codes are exactly
@@ -55,17 +55,17 @@ stateDiagram-v2
 
 Screen semantics:
 
-| Screen | Owns | Notes |
-| --- | --- | --- |
-| `Boot` | PWA install prompt state, settings hydration from IndexedDB | No user input; sub-second |
-| `MainMenu` | Top-level nav, player name summary | Shows bridge connectivity dot (connected / searching) |
-| `HostSetup` | Room name, mode (FFA/TDM), map, player cap | Creates room via bridge `room:create` ([networking.md](networking.md)) |
-| `JoinBrowser` | Room list, manual `ip:port`, QR scan/share | §7 |
-| `Settings` | All persisted options | §6 |
-| `Training` | Offline solo sandbox on Foundry | Runs the full sim locally; no bridge required |
-| `Lobby` | Roster, ready states, team assignment, chat | Reliable-channel events only |
-| `InGame` | HUD + pause overlay + touch controls | §4, §5 |
-| `MatchEnd` | Final scoreboard, per-player stats, rematch vote | Data is the last match snapshot; static |
+| Screen        | Owns                                                        | Notes                                                                  |
+| ------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `Boot`        | PWA install prompt state, settings hydration from IndexedDB | No user input; sub-second                                              |
+| `MainMenu`    | Top-level nav, player name summary                          | Shows bridge connectivity dot (connected / searching)                  |
+| `HostSetup`   | Room name, mode (FFA/TDM), map, player cap                  | Creates room via bridge `room:create` ([networking.md](networking.md)) |
+| `JoinBrowser` | Room list, manual `ip:port`, QR scan/share                  | §7                                                                     |
+| `Settings`    | All persisted options                                       | §6                                                                     |
+| `Training`    | Offline solo sandbox on Foundry                             | Runs the full sim locally; no bridge required                          |
+| `Lobby`       | Roster, ready states, team assignment, chat                 | Reliable-channel events only                                           |
+| `InGame`      | HUD + pause overlay + touch controls                        | §4, §5                                                                 |
+| `MatchEnd`    | Final scoreboard, per-player stats, rematch vote            | Data is the last match snapshot; static                                |
 
 Transitions are driven by store events, never by components mutating navigation state directly:
 the net layer dispatches `room:joined`, the sim dispatches `match:ended`, and the machine reduces
@@ -78,9 +78,9 @@ No external state library. `packages/client/src/ui/store.ts` implements one patt
 
 ```ts
 interface UiStore<S> {
-  getSnapshot(): S;                       // stable reference until something changed
-  subscribe(cb: () => void): () => void;  // returns unsubscribe
-  dispatch(event: UiEvent): void;         // the ONLY way state changes
+  getSnapshot(): S; // stable reference until something changed
+  subscribe(cb: () => void): () => void; // returns unsubscribe
+  dispatch(event: UiEvent): void; // the ONLY way state changes
 }
 ```
 
@@ -95,7 +95,7 @@ wrapped in typed hooks (`useHud()`, `useScreen()`, `useRoster()`). Rules:
 - **UI → game is commands, not state.** Menus call imperative game-facade methods
   (`game.startTraining()`, `net.joinRoom(id)`); they never reach into `SimWorld`. The ECS remains
   the single owner of gameplay state ([ecs.md](ecs.md)).
-- **No sim data mirrored wholesale.** The store holds *presentation* state only: the HUD slice is
+- **No sim data mirrored wholesale.** The store holds _presentation_ state only: the HUD slice is
   a handful of numbers, not entity pools.
 
 Why not Zustand/Redux: the store is ~120 lines, has zero dependencies (matching the project's
@@ -106,20 +106,20 @@ fixture format.
 
 The HUD is one absolutely-positioned layer over the canvas:
 
-| Element | Data source | Update trigger |
-| --- | --- | --- |
-| Health bar + number | Local player pool slot | 10 Hz poll + `hud:damage` event (instant on hit) |
-| Fuel gauge | Jetpack fuel value | 10 Hz poll (fuel drains smoothly; CSS transition tweens between polls) |
-| Ammo `mag / reserve` + reload spinner | Weapon state | Event-driven: `weapon:fired`, `weapon:reload`, `weapon:switch` |
-| Weapon icon + name | Equipped weapon id | Event-driven on switch |
-| Kill feed (last 5, 6 s TTL) | `match:kill` events | Event-driven; entries expire on a 1 Hz sweep |
-| Match timer + score summary | Match system | 1 Hz poll |
-| Ping indicator | Transport RTT estimate | 1 Hz poll ([networking.md](networking.md)) |
-| Hit markers / damage direction arcs | `hud:hit`, `hud:damaged` events | Event-driven, self-expiring via CSS animation |
-| Scoreboard | Roster + per-player stats | Mounted only while `Tab` held (desktop) or scoreboard button held (mobile); 2 Hz while visible |
-| Spawn-protection ring / respawn countdown | Respawn system events | Event-driven |
+| Element                                   | Data source                     | Update trigger                                                                                 |
+| ----------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Health bar + number                       | Local player pool slot          | 10 Hz poll + `hud:damage` event (instant on hit)                                               |
+| Fuel gauge                                | Jetpack fuel value              | 10 Hz poll (fuel drains smoothly; CSS transition tweens between polls)                         |
+| Ammo `mag / reserve` + reload spinner     | Weapon state                    | Event-driven: `weapon:fired`, `weapon:reload`, `weapon:switch`                                 |
+| Weapon icon + name                        | Equipped weapon id              | Event-driven on switch                                                                         |
+| Kill feed (last 5, 6 s TTL)               | `match:kill` events             | Event-driven; entries expire on a 1 Hz sweep                                                   |
+| Match timer + score summary               | Match system                    | 1 Hz poll                                                                                      |
+| Ping indicator                            | Transport RTT estimate          | 1 Hz poll ([networking.md](networking.md))                                                     |
+| Hit markers / damage direction arcs       | `hud:hit`, `hud:damaged` events | Event-driven, self-expiring via CSS animation                                                  |
+| Scoreboard                                | Roster + per-player stats       | Mounted only while `Tab` held (desktop) or scoreboard button held (mobile); 2 Hz while visible |
+| Spawn-protection ring / respawn countdown | Respawn system events           | Event-driven                                                                                   |
 
-**The cadence rule (load-bearing):** React renders are *never* driven per frame. Two mechanisms
+**The cadence rule (load-bearing):** React renders are _never_ driven per frame. Two mechanisms
 feed the HUD, and nothing else:
 
 1. **Events** for discrete facts (kills, hits, reloads, weapon switches) — dispatched by sim/net
@@ -159,13 +159,13 @@ keyboard/mouse mapper produces — the sim cannot tell input sources apart (see
 
 Right-edge column above the aim zone, thumb-reachable, 56 px min touch targets at scale 1.0:
 
-| Button | Action | Behavior |
-| --- | --- | --- |
-| Jetpack | Thrust while held | Largest button; also mapped to move-stick up |
-| Grenade | Frag grenade | Tap = quick throw; hold shows a simple power arc, release throws |
-| Reload | Reload | Pulses when mag is empty |
-| Switch | Next weapon | Shows current weapon icon |
-| Melee | Spanner Strike | Placed nearest the aim zone for panic reach |
+| Button  | Action            | Behavior                                                         |
+| ------- | ----------------- | ---------------------------------------------------------------- |
+| Jetpack | Thrust while held | Largest button; also mapped to move-stick up                     |
+| Grenade | Frag grenade      | Tap = quick throw; hold shows a simple power arc, release throws |
+| Reload  | Reload            | Pulses when mag is empty                                         |
+| Switch  | Next weapon       | Shows current weapon icon                                        |
+| Melee   | Spanner Strike    | Placed nearest the aim zone for panic reach                      |
 
 All touch handlers use pointer events with `touch-action: none` on the control layer, capture the
 pointer id, and tolerate up to 5 concurrent touches (two sticks + buttons).
@@ -184,13 +184,13 @@ Single scrollable screen, grouped; every change is applied live and persisted to
 (`aerocade/settings`, versioned record with migration on schema bumps — per ADR-007, no cloud,
 no accounts):
 
-| Group | Settings |
-| --- | --- |
-| Player | Display name (max 16 chars, shown in lobby/kill feed) |
-| Input | Mouse/aim-stick sensitivity (0.5–2.0×), full keybind remapping table, gamepad bindings |
-| Layout | HUD/control scale (0.8–1.4×), left-handed mode (mirrors sticks and button cluster) |
-| Audio | SFX volume, music volume (0–100, independent) |
-| Access | Colorblind-safe team palette toggle, reduced screen-shake toggle |
+| Group  | Settings                                                                               |
+| ------ | -------------------------------------------------------------------------------------- |
+| Player | Display name (max 16 chars, shown in lobby/kill feed)                                  |
+| Input  | Mouse/aim-stick sensitivity (0.5–2.0×), full keybind remapping table, gamepad bindings |
+| Layout | HUD/control scale (0.8–1.4×), left-handed mode (mirrors sticks and button cluster)     |
+| Audio  | SFX volume, music volume (0–100, independent)                                          |
+| Access | Colorblind-safe team palette toggle, reduced screen-shake toggle                       |
 
 Keybind capture uses a "press any key" modal listening on `KeyboardEvent.code` (layout-independent),
 rejects duplicates with an inline conflict warning, and offers per-binding and global reset to

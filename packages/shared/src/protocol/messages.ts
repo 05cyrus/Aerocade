@@ -9,6 +9,13 @@
 /** Protocol version; mismatches refuse to connect rather than misbehave. */
 export const PROTOCOL_VERSION = 1;
 
+/**
+ * Cap on one relayed game payload (base64). Snapshots are a few KiB; anything
+ * larger is hostile. Oversized messages are rejected, never truncated —
+ * a truncated game payload is garbage (docs/security.md).
+ */
+export const MAX_RELAY_PAYLOAD_CHARS = 16 * 1024;
+
 export interface RoomInfo {
   id: string;
   name: string;
@@ -76,7 +83,11 @@ export function parseClientToBridge(raw: unknown): ClientToBridge | null {
       return { t: 'room:list' };
     case 'room:join':
       return typeof msg.roomId === 'string' && typeof msg.playerName === 'string'
-        ? { t: 'room:join', roomId: msg.roomId.slice(0, 16), playerName: msg.playerName.slice(0, 24) }
+        ? {
+            t: 'room:join',
+            roomId: msg.roomId.slice(0, 16),
+            playerName: msg.playerName.slice(0, 24),
+          }
         : null;
     case 'room:leave':
       return { t: 'room:leave' };
@@ -85,7 +96,9 @@ export function parseClientToBridge(raw: unknown): ClientToBridge | null {
         ? { t: 'signal', to: msg.to.slice(0, 16), data: msg.data }
         : null;
     case 'relay':
-      return typeof msg.to === 'string' && typeof msg.payload === 'string'
+      return typeof msg.to === 'string' &&
+        typeof msg.payload === 'string' &&
+        msg.payload.length <= MAX_RELAY_PAYLOAD_CHARS
         ? { t: 'relay', to: msg.to.slice(0, 16), payload: msg.payload }
         : null;
     case 'ping':

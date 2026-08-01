@@ -78,11 +78,7 @@ function shade(u, v, { maskable }) {
   const y = (v - 0.5) / s + 0.5;
 
   // Background: vertical deep-space gradient plus a cyan glow.
-  let [r, g, b] = [
-    0x10 + (0x0b - 0x10) * v,
-    0x1a + (0x10 - 0x1a) * v,
-    0x35 + (0x20 - 0x35) * v,
-  ];
+  let [r, g, b] = [0x10 + (0x0b - 0x10) * v, 0x1a + (0x10 - 0x1a) * v, 0x35 + (0x20 - 0x35) * v];
   const glow = Math.max(0, 1 - Math.hypot(x - 0.5, y - 0.42) * 2.6);
   r += 0x3c * glow * glow * 0.25;
   g += 0xd6 * glow * glow * 0.25;
@@ -101,7 +97,7 @@ function shade(u, v, { maskable }) {
   }
 
   // Thruster flame.
-  if (inTriangle(x, y, 0.5, 0.84, 0.40, 0.64, 0.60, 0.64)) {
+  if (inTriangle(x, y, 0.5, 0.84, 0.4, 0.64, 0.6, 0.64)) {
     const t = (0.84 - y) / 0.2;
     r = 0xff;
     g = 0xe0 * (0.6 + 0.4 * t);

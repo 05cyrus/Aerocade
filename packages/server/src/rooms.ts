@@ -11,9 +11,11 @@ import {
 
 /** Messages allowed per peer per second (relay fallback traffic is chatty). */
 const RATE_LIMIT_PER_SECOND = 240;
-/** Rooms with no live sockets are evicted after this long. */
-const ROOM_IDLE_EVICT_MS = 60_000;
+/** Hard cap on a single message's wire size; larger is hostile, not gameplay. */
+const MAX_MESSAGE_BYTES = 32 * 1024;
 const MAX_ROOMS = 32;
+/** Total concurrent sockets the bridge will accept. */
+export const MAX_PEERS = 64;
 
 export interface Peer {
   id: string;
@@ -35,7 +37,6 @@ interface Room {
   mapId: string;
   /** Peer ids, host included. */
   members: Set<string>;
-  emptySince: number | null;
 }
 
 /**
@@ -70,6 +71,10 @@ export class RoomRegistry {
   handleRaw(peer: Peer, raw: string): void {
     if (this.rateLimited(peer)) {
       this.sendError(peer, 'rate-limited', 'slow down');
+      return;
+    }
+    if (raw.length > MAX_MESSAGE_BYTES) {
+      this.sendError(peer, 'bad-message', 'message too large');
       return;
     }
 
@@ -125,7 +130,6 @@ export class RoomRegistry {
           mode: msg.mode,
           mapId: msg.mapId,
           members: new Set([peer.id]),
-          emptySince: null,
         };
         this.rooms.set(room.id, room);
         peer.roomId = room.id;
@@ -142,6 +146,16 @@ export class RoomRegistry {
         const room = this.rooms.get(msg.roomId);
         if (room === undefined) {
           this.sendError(peer, 'room-not-found', 'no such room');
+          return;
+        }
+        // Re-joining the room you are already in (double-click, client retry)
+        // must be idempotent — leaveRoom here would close a host's own room.
+        if (peer.roomId === msg.roomId) {
+          this.send(peer, {
+            t: 'room:joined',
+            room: this.roomInfo(room),
+            hostPeerId: room.hostPeerId,
+          });
           return;
         }
         if (room.members.size >= MAX_PLAYERS) {
@@ -178,29 +192,17 @@ export class RoomRegistry {
     }
   }
 
-  /** Periodic housekeeping; call every few seconds. */
-  sweep(now = Date.now()): void {
-    for (const [id, room] of this.rooms) {
-      if (room.members.size === 0) {
-        room.emptySince ??= now;
-        if (now - room.emptySince > ROOM_IDLE_EVICT_MS) this.rooms.delete(id);
-      } else {
-        room.emptySince = null;
-      }
-    }
-  }
-
   get roomCount(): number {
     return this.rooms.size;
   }
 
+  get peerCount(): number {
+    return this.peers.size;
+  }
+
   // ---------- internals ----------
 
-  private forward(
-    peer: Peer,
-    targetId: string,
-    build: (fromId: string) => BridgeToClient,
-  ): void {
+  private forward(peer: Peer, targetId: string, build: (fromId: string) => BridgeToClient): void {
     if (peer.roomId === null) {
       this.sendError(peer, 'not-in-room', 'join a room first');
       return;

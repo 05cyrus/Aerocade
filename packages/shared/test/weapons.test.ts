@@ -175,6 +175,28 @@ describe('melee', () => {
   });
 });
 
+describe('reload under held trigger', () => {
+  it('auto weapons auto-reload when the mag empties while the trigger stays held', () => {
+    const world = createTestWorld();
+    const p = addCombatant(world);
+    run(world, 30);
+    const def = weaponDef(DEFAULT_LOADOUT[0]);
+    const slotIndex = p * WEAPON_SLOTS;
+    world.players.ammoMag[slotIndex] = 1;
+
+    stage(world, p, { buttons: Buttons.Fire, aim: 0 }); // hold forever
+    run(world, 2); // last round leaves the mag
+    expect(world.players.ammoMag[slotIndex]).toBe(0);
+    // Once the final shot's cycle cooldown lapses — trigger still held, no
+    // fresh press — the reload must start on its own.
+    run(world, Math.ceil(def.cycleTime / SIM_DT) + 2);
+    expect(world.players.reload[p] ?? 0).toBeGreaterThan(0);
+    // And after the reload completes, still holding fire resumes shooting.
+    run(world, Math.ceil(def.reloadTime / SIM_DT) + 3);
+    expect(world.players.ammoMag[slotIndex] ?? 0).toBeLessThan(def.magSize);
+  });
+});
+
 describe('grenades', () => {
   it('throws, bounces, and detonates after the fuse', () => {
     const world = createTestWorld();
@@ -197,5 +219,25 @@ describe('grenades', () => {
       }
     }
     expect(sawExplosion).toBe(true);
+  });
+
+  it('a grenade at rest settles silently instead of spamming bounce events', () => {
+    const world = createTestWorld();
+    const p = addCombatant(world);
+    run(world, 30);
+    stage(world, p, { buttons: Buttons.Grenade, aim: Math.PI / 2 }); // straight down
+    run(world, 1);
+    stage(world, p, {});
+
+    let bounces = 0;
+    let exploded = false;
+    for (let t = 0; t < Math.ceil(TUNING.grenade.fuse / SIM_DT) + 10 && !exploded; t++) {
+      run(world, 1);
+      bounces += countEvents(world, SimEventType.GrenadeBounce);
+      exploded = countEvents(world, SimEventType.Explosion) > 0;
+    }
+    expect(exploded).toBe(true);
+    // A short drop bounces a couple of times, then rests: not 60 events/second.
+    expect(bounces).toBeLessThanOrEqual(6);
   });
 });

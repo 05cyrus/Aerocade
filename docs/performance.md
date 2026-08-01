@@ -14,19 +14,19 @@ and [testing.md](testing.md).
 
 One display frame at 60 Hz is 16.6 ms. The sim runs at a fixed 60 Hz (`SIM_DT = 1/60`) inside an
 accumulator, so a typical frame executes exactly one sim tick; after a stall the accumulator may
-run two or three. Budgets are set so that the *typical* frame leaves ≥ 4 ms of slack for the
-browser (compositing, input, incremental GC) and the *worst* frame (2 catch-up ticks + snapshot
+run two or three. Budgets are set so that the _typical_ frame leaves ≥ 4 ms of slack for the
+browser (compositing, input, incremental GC) and the _worst_ frame (2 catch-up ticks + snapshot
 decode + reconciliation replay) still fits under 16.6 ms.
 
-| Stage | Typical budget | Worst-case budget | Notes |
-|---|---:|---:|---|
-| Sim tick(s) (all systems, ADR-005 order) | 2.5 ms | 5.0 ms | 1 tick typical; 2 catch-up ticks worst case |
-| Reconciliation replay (client, M2+) | 0.5 ms | 2.0 ms | Replays ≤ RTT×60 predicted ticks after a snapshot; hard cap 12 ticks |
-| Net encode/decode (input send, snapshot apply) | 0.5 ms | 1.0 ms | Typed-array codec, no JSON on the game channel |
-| Interpolation + render-state prep | 0.5 ms | 0.5 ms | Lerp between sim states / snapshot buffer |
-| Phaser update + draw | 6.0 ms | 6.0 ms | Sprite sync, particles, camera, single-atlas batch |
-| React/HUD DOM | 0.3 ms | 0.5 ms | Imperative updates only; no per-frame setState |
-| Slack (browser, GC headroom) | 6.3 ms | 1.6 ms | |
+| Stage                                          | Typical budget | Worst-case budget | Notes                                                                |
+| ---------------------------------------------- | -------------: | ----------------: | -------------------------------------------------------------------- |
+| Sim tick(s) (all systems, ADR-005 order)       |         2.5 ms |            5.0 ms | 1 tick typical; 2 catch-up ticks worst case                          |
+| Reconciliation replay (client, M2+)            |         0.5 ms |            2.0 ms | Replays ≤ RTT×60 predicted ticks after a snapshot; hard cap 12 ticks |
+| Net encode/decode (input send, snapshot apply) |         0.5 ms |            1.0 ms | Typed-array codec, no JSON on the game channel                       |
+| Interpolation + render-state prep              |         0.5 ms |            0.5 ms | Lerp between sim states / snapshot buffer                            |
+| Phaser update + draw                           |         6.0 ms |            6.0 ms | Sprite sync, particles, camera, single-atlas batch                   |
+| React/HUD DOM                                  |         0.3 ms |            0.5 ms | Imperative updates only; no per-frame setState                       |
+| Slack (browser, GC headroom)                   |         6.3 ms |            1.6 ms |                                                                      |
 
 Rules derived from the table:
 
@@ -45,16 +45,16 @@ boot, map load, and match setup/teardown.
 
 Pool inventory (all fixed-capacity, allocated once at `SimWorld` creation):
 
-| Pool | Capacity | Backing | Approx. footprint |
-|---|---:|---|---:|
-| Players | 8 | Parallel typed arrays (pos, vel, health, fuel, aim, ammo, timers, flags) | ~4 KB |
-| Projectiles | 256 | Parallel typed arrays (pos, vel, type, owner, ttl/fuse, flags) | ~24 KB |
-| Pickups | 64 | Parallel typed arrays (pos, type, respawn timer, flags) | ~2 KB |
-| Snapshot buffers | 3 (interp/net) | Typed-array copies of the above | ~90 KB |
-| Rewind ring (host, M3 lag comp) | 64 ticks | Typed-array copies | ~2 MB ceiling |
-| Render sprite pool | ≥ pool caps | Phaser sprites, pre-created, visibility-toggled | GPU/JS mixed |
-| Particle emitters | fixed set | Pre-created Phaser emitters, hard particle caps | GPU/JS mixed |
-| Scratch vectors/AABBs | ~a dozen | Module-level reusable temps in `shared` math | negligible |
+| Pool                            |       Capacity | Backing                                                                  | Approx. footprint |
+| ------------------------------- | -------------: | ------------------------------------------------------------------------ | ----------------: |
+| Players                         |              8 | Parallel typed arrays (pos, vel, health, fuel, aim, ammo, timers, flags) |             ~4 KB |
+| Projectiles                     |            256 | Parallel typed arrays (pos, vel, type, owner, ttl/fuse, flags)           |            ~24 KB |
+| Pickups                         |             64 | Parallel typed arrays (pos, type, respawn timer, flags)                  |             ~2 KB |
+| Snapshot buffers                | 3 (interp/net) | Typed-array copies of the above                                          |            ~90 KB |
+| Rewind ring (host, M3 lag comp) |       64 ticks | Typed-array copies                                                       |     ~2 MB ceiling |
+| Render sprite pool              |    ≥ pool caps | Phaser sprites, pre-created, visibility-toggled                          |      GPU/JS mixed |
+| Particle emitters               |      fixed set | Pre-created Phaser emitters, hard particle caps                          |      GPU/JS mixed |
+| Scratch vectors/AABBs           |       ~a dozen | Module-level reusable temps in `shared` math                             |        negligible |
 
 Entity "creation" is flag-flipping (`alive[i] = 1`) plus field writes at a free index; "deletion"
 clears the flag. Snapshots are `TypedArray.set()` copies — no object graphs, no serialization
@@ -87,11 +87,11 @@ lint rules where possible:
 Game traffic uses the binary codec from [networking.md](networking.md); JSON appears only on the
 bridge WebSocket control plane (ADR-006). Budgets:
 
-| Payload | Rate | Size budget | Bandwidth (worst) |
-|---|---|---:|---:|
-| Client → host input packet | 60 Hz | ≤ 24 B (seq, buttons bitfield, aim, redundant last 3 inputs) | ~12 kbit/s per client |
-| Host → client delta snapshot | 30 Hz | ≤ 1.2 KB typical, ≤ 6 KB full/keyframe | ≤ 290 kbit/s per client typical |
-| Reliable events (join/spawn/match) | sporadic | ≤ 512 B | negligible |
+| Payload                            | Rate     |                                                  Size budget |               Bandwidth (worst) |
+| ---------------------------------- | -------- | -----------------------------------------------------------: | ------------------------------: |
+| Client → host input packet         | 60 Hz    | ≤ 24 B (seq, buttons bitfield, aim, redundant last 3 inputs) |           ~12 kbit/s per client |
+| Host → client delta snapshot       | 30 Hz    |                       ≤ 1.2 KB typical, ≤ 6 KB full/keyframe | ≤ 290 kbit/s per client typical |
+| Reliable events (join/spawn/match) | sporadic |                                                      ≤ 512 B |                      negligible |
 
 - A **full snapshot** (8 players + 256 projectiles + 64 pickups) is ~6 KB. Deltas encode only
   entities whose fields changed since the client's last acked tick; with 8 players and a few dozen
@@ -103,7 +103,7 @@ bridge WebSocket control plane (ADR-006). Budgets:
 - **One message per tick per direction.** Never emit multiple small DataChannel messages per tick;
   per-message overhead (SCTP + JS event dispatch) dominates payload at small sizes.
 - The host encodes 7 client snapshots per net tick; total host upstream stays ≤ ~2 Mbit/s worst
-  case — trivial for LAN Wi-Fi, but the *CPU* cost of encoding on a phone host is what the 30 Hz
+  case — trivial for LAN Wi-Fi, but the _CPU_ cost of encoding on a phone host is what the 30 Hz
   rate (not 60) protects.
 
 ## Phaser-side costs
@@ -168,12 +168,12 @@ flowchart LR
 
 ## Memory targets and leak checks
 
-| Metric | Target |
-|---|---|
-| Total JS heap during a match (mid-range Android) | < 128 MB |
-| `shared` sim state (pools + snapshots + rewind ring) | < 3 MB, fixed at match start |
-| Heap growth across 10 consecutive matches (return to menu between) | ±5% (flat) |
-| Detached DOM nodes after leaving a match | 0 |
+| Metric                                                             | Target                       |
+| ------------------------------------------------------------------ | ---------------------------- |
+| Total JS heap during a match (mid-range Android)                   | < 128 MB                     |
+| `shared` sim state (pools + snapshots + rewind ring)               | < 3 MB, fixed at match start |
+| Heap growth across 10 consecutive matches (return to menu between) | ±5% (flat)                   |
+| Detached DOM nodes after leaving a match                           | 0                            |
 
 - **Pool high-water marks:** every pool tracks its peak live count per match and logs it at match
   end. A projectile high-water mark pinned at capacity (256) or a count that never returns to 0
@@ -207,19 +207,19 @@ and reports ticks/sec plus bytes allocated (via `--expose-gc` heap sampling, whi
   if per-tick heap allocation is non-zero. The baseline file is updated deliberately, in its own
   commit, with justification.
 - Rationale: CI hardware is faster than the target phone, so the absolute number is not the 60 FPS
-  proof (device sign-off is), but the *relative* gate catches accidental O(n²) loops, allocation
+  proof (device sign-off is), but the _relative_ gate catches accidental O(n²) loops, allocation
   regressions, and system-cost creep the moment they land. It runs as part of `npm run verify`
   extensions in CI, per [testing.md](testing.md).
 
 ## Known risk areas (ranked)
 
-| # | Risk | Why it bites | Mitigation |
-|---|---|---|---|
-| 1 | **Particle overdraw on mobile** — explosions (Thumper r=3.2 m, frags) + 8 jetpack flames stack additive-blended quads; tile-based mobile GPUs choke on fill rate, not vertex count | Worst case: multi-rocket fight in a corridor → full-screen overlapping additive layers | Hard global particle cap per tier; explosion emitters share one budget (oldest culled); additive glow disabled on Low; DPR/resolution governor recovers automatically; overlay shows live particle count |
-| 2 | **RTC message rate / per-message overhead** — 8 peers × 60 Hz inputs + 30 Hz snapshots on a phone *host*; SCTP + JS event dispatch per message costs more than the bytes | Host frame budget erodes; input jitter appears as gameplay stutter for everyone | One message per tick per peer, batched fields; redundant-input piggybacking instead of retransmit chatter; snapshot rate fixed at 30 Hz (never 60); decode/encode ms tracked in overlay; relay fallback inherits the same budgets |
-| 3 | **React re-render leaks into the game loop** — HUD state (health, ammo, fuel) updated via setState at 60 Hz forces reconciliation + layout every frame | Death by a thousand 0.5 ms cuts; worst on low-end phones where style/layout is slow | HUD reads sim state through a subscription store with imperative DOM/text updates for per-frame values; React re-renders only on discrete events (kill feed, scoreboard at ≤ 10 Hz); `React.memo` on HUD tree; overlay flags any frame with > 1 React commit |
-| 4 | **Reconciliation replay bursts** — high RTT spike → many predicted ticks replayed in one frame | One-frame hitch on the client after loss | Replay cap (12 ticks) with snap-to-authoritative beyond it; replay ms instrumented |
-| 5 | **Rewind-ring memory on phone hosts** — 64 snapshot copies live on the host | Heap pressure on the weakest possible host device | Ring stores quantized player state only (not projectiles/pickups) since lag comp needs hitboxes; ceiling stays ≪ 2 MB |
+| #   | Risk                                                                                                                                                                               | Why it bites                                                                           | Mitigation                                                                                                                                                                                                                                                   |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **Particle overdraw on mobile** — explosions (Thumper r=3.2 m, frags) + 8 jetpack flames stack additive-blended quads; tile-based mobile GPUs choke on fill rate, not vertex count | Worst case: multi-rocket fight in a corridor → full-screen overlapping additive layers | Hard global particle cap per tier; explosion emitters share one budget (oldest culled); additive glow disabled on Low; DPR/resolution governor recovers automatically; overlay shows live particle count                                                     |
+| 2   | **RTC message rate / per-message overhead** — 8 peers × 60 Hz inputs + 30 Hz snapshots on a phone _host_; SCTP + JS event dispatch per message costs more than the bytes           | Host frame budget erodes; input jitter appears as gameplay stutter for everyone        | One message per tick per peer, batched fields; redundant-input piggybacking instead of retransmit chatter; snapshot rate fixed at 30 Hz (never 60); decode/encode ms tracked in overlay; relay fallback inherits the same budgets                            |
+| 3   | **React re-render leaks into the game loop** — HUD state (health, ammo, fuel) updated via setState at 60 Hz forces reconciliation + layout every frame                             | Death by a thousand 0.5 ms cuts; worst on low-end phones where style/layout is slow    | HUD reads sim state through a subscription store with imperative DOM/text updates for per-frame values; React re-renders only on discrete events (kill feed, scoreboard at ≤ 10 Hz); `React.memo` on HUD tree; overlay flags any frame with > 1 React commit |
+| 4   | **Reconciliation replay bursts** — high RTT spike → many predicted ticks replayed in one frame                                                                                     | One-frame hitch on the client after loss                                               | Replay cap (12 ticks) with snap-to-authoritative beyond it; replay ms instrumented                                                                                                                                                                           |
+| 5   | **Rewind-ring memory on phone hosts** — 64 snapshot copies live on the host                                                                                                        | Heap pressure on the weakest possible host device                                      | Ring stores quantized player state only (not projectiles/pickups) since lag comp needs hitboxes; ceiling stays ≪ 2 MB                                                                                                                                        |
 
 Anything that moves a stage past its budget in the table at the top of this document is treated as
 a release blocker for the milestone in flight, not as polish for M6.

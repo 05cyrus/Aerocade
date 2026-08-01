@@ -1,0 +1,49 @@
+/**
+ * Player input as the simulation consumes it. One `InputCommand` per player
+ * per tick. Clients sample devices into this shape; the host validates it
+ * before feeding it to the simulation (see docs/security.md).
+ */
+
+/** Button bitfield. Held state every tick; the sim edge-detects where needed. */
+export const Buttons = {
+  Jump: 1 << 0,
+  Thrust: 1 << 1,
+  Fire: 1 << 2,
+  Melee: 1 << 3,
+  Grenade: 1 << 4,
+  Reload: 1 << 5,
+  SwitchWeapon: 1 << 6,
+  Walk: 1 << 7,
+} as const;
+
+export type ButtonMask = number;
+
+export interface InputCommand {
+  /** Client-side monotonically increasing sequence number (netcode acking). */
+  seq: number;
+  /** Horizontal move axis in [-1, 1]. Magnitude selects walk/run speed. */
+  moveX: number;
+  /** Vertical move axis in [-1, 1] (reserved for analog thrust/crouch use). */
+  moveY: number;
+  /** Aim direction in radians, screen convention (y-down, 0 = right). */
+  aim: number;
+  /** OR of `Buttons` flags held this tick. */
+  buttons: ButtonMask;
+}
+
+/** A neutral command (used for absent players and packet-loss gaps). */
+export function emptyInput(): InputCommand {
+  return { seq: 0, moveX: 0, moveY: 0, aim: 0, buttons: 0 };
+}
+
+/**
+ * Clamp a (potentially hostile) command into legal ranges, in place.
+ * The host runs this on every command before simulation.
+ */
+export function sanitizeInput(cmd: InputCommand): InputCommand {
+  cmd.moveX = Number.isFinite(cmd.moveX) ? Math.max(-1, Math.min(1, cmd.moveX)) : 0;
+  cmd.moveY = Number.isFinite(cmd.moveY) ? Math.max(-1, Math.min(1, cmd.moveY)) : 0;
+  cmd.aim = Number.isFinite(cmd.aim) ? cmd.aim : 0;
+  cmd.buttons = (cmd.buttons >>> 0) & 0xff;
+  return cmd;
+}

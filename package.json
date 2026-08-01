@@ -1,0 +1,36 @@
+{
+  "name": "aerocade",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aerocade — an original fast-paced 2D jetpack arena shooter for the browser. LAN multiplayer PWA, no internet required.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "packages/client",
+    "packages/server"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @aerocade/client",
+    "dev:server": "npm run dev -w @aerocade/server",
+    "build": "npm run build -w @aerocade/shared && npm run build -w @aerocade/client && npm run build -w @aerocade/server",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.0",
+    "vitest": "^3.0.0"
+  }
+}

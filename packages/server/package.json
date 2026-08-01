@@ -1,0 +1,28 @@
+{
+  "name": "@aerocade/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aerocade LAN bridge: serves the PWA on the local network, hosts room discovery, WebRTC signaling, and WebSocket relay fallback.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "aerocade-lan": "./dist/server.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/server.js",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/server.js --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aerocade/shared": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.2"
+  }
+}

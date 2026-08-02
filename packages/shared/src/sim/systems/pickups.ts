@@ -253,14 +253,21 @@ function advanceDrops(world: SimWorld): void {
 
 function resolveCollections(world: SimWorld): void {
   const pk = world.pickups;
-  // A player takes at most one item per tick: collecting can itself drop gear
-  // into a later pool slot, and nobody should sweep a pile in a single press.
+  // A player makes at most one *deliberate* pickup per tick: collecting can
+  // itself drop gear into a later pool slot, and nobody should sweep a pile
+  // with one press. Automatic grenade gathering is exempt — it is not a
+  // decision, and it is already bounded by the carry cap.
   let claimed = 0;
   for (let i = 0; i < MAX_PICKUPS; i++) {
     if (pk.alive[i] !== 1) continue;
     const taker = findCollector(world, i);
-    if (taker === -1 || (claimed & (1 << taker)) !== 0) continue;
-    claimed |= 1 << taker;
+    if (taker === -1) continue;
+
+    const automatic = (pk.kind[i] as PickupKind) === PickupKind.Grenades;
+    if (!automatic) {
+      if ((claimed & (1 << taker)) !== 0) continue;
+      claimed |= 1 << taker;
+    }
     collect(world, taker, i);
   }
 }
@@ -278,26 +285,31 @@ export function playerReachesPickup(world: SimWorld, player: number, pickup: num
 }
 
 /**
- * Index of the ground item a player is standing on, or -1. Clients call this
- * to decide whether to offer the pickup button, so the prompt can never
- * disagree with what the simulation would accept.
+ * Index of the ground item a player must *press* to collect, or -1. Clients
+ * call this to decide whether to offer the pickup button, so the prompt can
+ * never disagree with what the simulation would accept.
+ *
+ * Grenades are excluded: they are gathered automatically when there is room
+ * and cannot be taken at all when full, so a button for them would never do
+ * anything.
  */
 export function findPickupUnderPlayer(world: SimWorld, player: number): number {
   for (let i = 0; i < MAX_PICKUPS; i++) {
+    if ((world.pickups.kind[i] as PickupKind) === PickupKind.Grenades) continue;
     if (playerReachesPickup(world, player, i)) return i;
   }
   return -1;
 }
 
 /**
- * A player out of grenades sweeps one up just by walking over it — being
- * unable to answer a grenade because you had to remember a button is a
- * frustration, not a decision. Any grenades in hand and it goes back to a
- * deliberate press (ADR-016).
+ * Grenades are gathered by walking over them, up to the carry cap — no button
+ * (ADR-016). Weapons never auto-collect: swapping your gun must stay a
+ * deliberate choice, but topping up grenades is never a decision worth a
+ * keypress.
  */
 function autoCollects(world: SimWorld, player: number, pickup: number): boolean {
   if ((world.pickups.kind[pickup] as PickupKind) !== PickupKind.Grenades) return false;
-  return (world.players.grenades[player] ?? 0) === 0;
+  return (world.players.grenades[player] ?? 0) < TUNING.player.maxGrenades;
 }
 
 /**
@@ -307,9 +319,19 @@ function autoCollects(world: SimWorld, player: number, pickup: number): boolean 
  */
 function findCollector(world: SimWorld, pickup: number): number {
   const p = world.players;
+  const isGrenades = (world.pickups.kind[pickup] as PickupKind) === PickupKind.Grenades;
+
   for (let t = 0; t < MAX_PLAYERS; t++) {
     if (!playerReachesPickup(world, t, pickup)) continue;
-    if (autoCollects(world, t, pickup)) return t;
+
+    if (isGrenades) {
+      // Automatic when there is room, and impossible when full — a press
+      // never enters into it, so a player standing on a stack they cannot
+      // use never has their press swallowed by it.
+      if (autoCollects(world, t, pickup)) return t;
+      continue;
+    }
+
     const cmd = world.inputs[t];
     if (cmd === undefined) continue;
     const pressed = cmd.buttons & ~(p.prevButtons[t] ?? 0);
@@ -327,10 +349,21 @@ function collect(world: SimWorld, player: number, pickup: number): void {
   if ((pk.kind[pickup] as PickupKind) === PickupKind.Grenades) {
     const p = world.players;
     const have = p.grenades[player] ?? 0;
-    if (have >= TUNING.player.maxGrenades) return; // full: leave it for someone else
-    p.grenades[player] = Math.min(TUNING.player.maxGrenades, have + (pk.mag[pickup] ?? 0));
-    releaseSlot(world, pickup);
-    world.events.emit(SimEventType.PickupTaken, player, -1, x, y, 1);
+    const room = TUNING.player.maxGrenades - have;
+    if (room <= 0) return; // full: leave the whole stack for someone else
+
+    // Take only what fits. A stack of 3 walked over by a player holding 1
+    // gives up 2 and keeps 1 lying there for the next person.
+    const available = pk.mag[pickup] ?? 0;
+    const taken = Math.min(room, available);
+    if (taken <= 0) return;
+    p.grenades[player] = have + taken;
+
+    const remaining = available - taken;
+    if (remaining > 0) pk.mag[pickup] = remaining;
+    else releaseSlot(world, pickup);
+
+    world.events.emit(SimEventType.PickupTaken, player, -1, x, y, taken);
     return;
   }
 

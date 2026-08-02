@@ -244,10 +244,17 @@ Health and ammo pads remain the natural next kinds: another `PickupKind` and a b
 
 ## ADR-016: Empty-handed grenade pickup, and scopes as a camera-only concern
 
-**Grenades auto-collect when you have none.** Being unable to answer a grenade because you had
-to remember a button is a frustration, not a decision. With any grenades in hand it goes back
-to a deliberate press — so the auto-grab is a safety net, never a vacuum that fills your
-pockets as you run. Weapons are never auto-collected; swapping your gun must always be a choice
+**Grenades are gathered by walking over them, up to the carry cap.** Being unable to answer a
+grenade because you had to remember a button is a frustration, not a decision, and topping up is
+never a choice worth a keypress. The pickup is **partial**: a player holding 1 who crosses a
+stack of 3 takes 2 and leaves 1 lying there for the next person, so a stack is a shared resource
+rather than a first-come-all-or-nothing prize. A player at the cap takes nothing and leaves the
+stack whole.
+
+Because grenades are automatic, they are excluded from the interact prompt entirely — a button
+for them could never do anything — and automatic collection is exempt from the
+one-deliberate-pickup-per-tick rule, so topping up grenades never swallows the press you meant
+for a gun. Weapons are still never auto-collected; swapping your gun must always be a choice
 (ADR-014).
 
 **Scope never touches the simulation.** Each weapon carries a `ScopeDef` — a zoom-out factor
@@ -263,6 +270,10 @@ sim never reads it:
 Profiles run from the Scattergun (1.1×, 2 m — point blank by design) to the Longbolt Rifle
 (2.3×, 15 m — sees most of the arena), so picking up a sniper genuinely changes how you read
 the map. Zoom and offset both ease frame-rate independently; toggling never snaps.
+
+The button's label shows the **current effective** zoom (`1×` unscoped, the weapon's factor
+scoped), not the weapon's potential. Showing the potential made the label look static across a
+toggle and implied you were already zoomed when you were not.
 
 ## Milestones
 

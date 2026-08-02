@@ -368,7 +368,7 @@ describe('death drops equipment', () => {
     }
   });
 
-  it('picking up a dropped grenade bundle adds them, capped', () => {
+  it('a dropped bundle tops the looter up to the cap', () => {
     const world = padRoom();
     const victim = addCombatant(world);
     const looter = addCombatant(world);
@@ -437,7 +437,7 @@ describe('grenades are picked up automatically when you have none', () => {
     return bundle;
   }
 
-  it('walks them up with no input at all when empty', () => {
+  it('walks them up with no input at all', () => {
     const world = padRoom();
     const owner = addCombatant(world);
     const looter = addCombatant(world);
@@ -453,24 +453,65 @@ describe('grenades are picked up automatically when you have none', () => {
     expect(world.pickups.alive[bundle]).toBe(0);
   });
 
-  it('still needs a press when you already carry some', () => {
+  it('takes only what fits and leaves the rest on the ground', () => {
     const world = padRoom();
     const owner = addCombatant(world);
     const looter = addCombatant(world);
     run(world, 5);
     const bundle = bundleAt(world, owner, 8.5, 3.4);
+    world.pickups.mag[bundle] = 3; // a stack of three
 
-    world.players.grenades[looter] = 1; // not empty
+    world.players.grenades[looter] = 1; // room for exactly two
     teleport(world, looter, 8.5, 3.4);
     stage(world, looter, {});
-    run(world, 30);
-    expect(world.players.grenades[looter]).toBe(1);
-    expect(world.pickups.alive[bundle]).toBe(1);
-
-    teleport(world, looter, 8.5, 3.4);
-    stage(world, looter, { buttons: Buttons.Interact });
     run(world, 1);
-    expect(world.players.grenades[looter]).toBe(3);
+
+    expect(world.players.grenades[looter]).toBe(TUNING.player.maxGrenades);
+    // The odd one out stays put for whoever comes next.
+    expect(world.pickups.alive[bundle]).toBe(1);
+    expect(world.pickups.mag[bundle]).toBe(1);
+  });
+
+  it('a full player leaves the whole stack alone', () => {
+    const world = padRoom();
+    const owner = addCombatant(world);
+    const looter = addCombatant(world);
+    run(world, 5);
+    const bundle = bundleAt(world, owner, 8.5, 3.4);
+    world.pickups.mag[bundle] = 2;
+
+    world.players.grenades[looter] = TUNING.player.maxGrenades;
+    teleport(world, looter, 8.5, 3.4);
+    stage(world, looter, {});
+    run(world, 60);
+
+    expect(world.players.grenades[looter]).toBe(TUNING.player.maxGrenades);
+    expect(world.pickups.mag[bundle]).toBe(2);
+  });
+
+  it('the leftover is still collectable by a second player', () => {
+    const world = padRoom();
+    const owner = addCombatant(world);
+    const first = addCombatant(world);
+    const second = addCombatant(world);
+    run(world, 5);
+    const bundle = bundleAt(world, owner, 8.5, 3.4);
+    world.pickups.mag[bundle] = 3;
+
+    world.players.grenades[first] = 2; // room for one
+    teleport(world, first, 8.5, 3.4);
+    stage(world, first, {});
+    run(world, 1);
+    expect(world.players.grenades[first]).toBe(3);
+    expect(world.pickups.mag[bundle]).toBe(2);
+
+    teleport(world, first, 2, 3.4); // step away
+    world.players.grenades[second] = 1;
+    teleport(world, second, 8.5, 3.4);
+    stage(world, second, {});
+    run(world, 1);
+    expect(world.players.grenades[second]).toBe(3);
+    expect(world.pickups.alive[bundle]).toBe(0); // stack exhausted
   });
 
   it('never auto-collects weapons, only grenades', () => {

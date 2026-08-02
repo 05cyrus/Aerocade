@@ -61,6 +61,7 @@ export class GameSession implements SceneDriver {
   private accumulator = 0;
   private lastAim = 0;
   private lastFrameAt = 0;
+  private lastLoadoutSignature = '';
   /** Scoped view. Client-only camera state — never reaches the sim (ADR-016). */
   private scoped = false;
   private destroyed = false;
@@ -101,6 +102,7 @@ export class GameSession implements SceneDriver {
     this.scene = scene;
     this.interp.capture(this.world); // both buffers start at spawn state
     this.interp.capture(this.world);
+    appStore.setWeaponIcons(scene.weaponIcons()); // atlas exists now
     this.publishHud(); // the HUD must show this match from the first frame
   }
 
@@ -137,9 +139,11 @@ export class GameSession implements SceneDriver {
     const buttons = sampled.buttons | (appStore.consumeInteract() ? Buttons.Interact : 0);
     // Scope is presentation: the Z key and the on-screen button both flip a
     // client flag the camera reads; nothing about it enters the simulation.
-    if (sampled.scopeToggled || appStore.consumeScopeToggle()) {
-      this.scoped = !this.scoped;
-    }
+    // Both sources are read unconditionally — short-circuiting past
+    // `consumeScopeToggle` would strand a queued tap and fire it a tick later.
+    const keyToggled = sampled.scopeToggled;
+    const buttonToggled = appStore.consumeScopeToggle();
+    if (keyToggled !== buttonToggled) this.scoped = !this.scoped;
     scene.setScoped(this.scoped);
     this.lastAim = scene.computeAimFor(this.localPlayer, this.interp);
     setInput(this.world, this.localPlayer, {
@@ -159,7 +163,13 @@ export class GameSession implements SceneDriver {
     this.publishPrompt();
     this.publishScope();
 
-    if (this.world.tick % HUD_EVERY_TICKS === 0) this.publishHud();
+    // The weapon panel must track every shot and reload, not the 10 Hz HUD
+    // cadence, so publish immediately whenever the loadout signature moves.
+    const signature = this.loadoutSignature();
+    if (signature !== this.lastLoadoutSignature || this.world.tick % HUD_EVERY_TICKS === 0) {
+      this.lastLoadoutSignature = signature;
+      this.publishHud();
+    }
   }
 
   /**
@@ -223,6 +233,17 @@ export class GameSession implements SceneDriver {
     appStore.setPrompt({ weaponId, weaponName: weaponDef(weaponId).name });
   }
 
+  /** Cheap change-detector for "what the weapon panel shows". */
+  private loadoutSignature(): string {
+    const p = this.world.players;
+    const i = this.localPlayer;
+    const slot = p.weaponSlot[i] ?? 0;
+    const idx = i * WEAPON_SLOTS + slot;
+    return `${String(p.weapons[idx])}:${String(p.ammoMag[idx])}:${String(
+      p.ammoReserve[idx],
+    )}:${String(p.grenades[i])}:${String((p.reload[i] ?? 0) > 0)}`;
+  }
+
   /** Keep the HUD's scope button in sync with the held weapon's zoom. */
   private publishScope(): void {
     const p = this.world.players;
@@ -253,6 +274,7 @@ export class GameSession implements SceneDriver {
       ammoMag: p.ammoMag[slotIndex] ?? 0,
       ammoReserve: p.ammoReserve[slotIndex] ?? 0,
       weaponName: def.name,
+      weaponId: def.id,
       grenades: p.grenades[i] ?? 0,
       reloading: (p.reload[i] ?? 0) > 0,
       kills: p.kills[i] ?? 0,

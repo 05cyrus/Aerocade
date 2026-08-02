@@ -144,12 +144,6 @@ body,
   min-width: 220px;
 }
 
-.hud-bottom-right {
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(16px, env(safe-area-inset-bottom));
-  text-align: right;
-}
-
 .hud-top-right {
   right: max(16px, env(safe-area-inset-right));
   top: max(12px, env(safe-area-inset-top));
@@ -197,26 +191,16 @@ body,
 }
 
 .ammo {
-  font-size: 34px;
   font-weight: 700;
   color: var(--ac-text);
-  line-height: 1;
 }
 
 .ammo .reserve {
-  font-size: 18px;
   color: var(--ac-dim);
 }
 
 .weapon-name {
   color: var(--ac-accent);
-  font-size: 14px;
-  letter-spacing: 0.1em;
-}
-
-.grenades {
-  color: var(--ac-dim);
-  font-size: 13px;
 }
 
 .reloading {
@@ -282,7 +266,7 @@ body,
 
 .pickup-note {
   position: absolute;
-  top: 26%;
+  top: 32%;
   width: 100%;
   text-align: center;
   color: var(--ac-accent2);
@@ -313,7 +297,8 @@ body,
 
 .protect-note {
   position: absolute;
-  top: 18%;
+  /* Clear of the top-center weapon panel above it. */
+  top: 24%;
   width: 100%;
   text-align: center;
   color: var(--ac-accent2);
@@ -499,4 +484,81 @@ body,
 /* The kill feed sits below the scope button rather than under it. */
 .hud-top-right {
   top: calc(max(12px, env(safe-area-inset-top)) + 72px);
+}
+
+/* ---------- Top-center weapon panel ---------- */
+
+/*
+ * The single place to read your loadout: icon, name, ammo, grenades. Sits
+ * top-center, clear of the corner buttons, and updates the tick anything
+ * changes rather than on the HUD's 10 Hz poll.
+ */
+.weapon-panel {
+  position: absolute;
+  top: max(52px, calc(env(safe-area-inset-top) + 52px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: var(--ac-panel);
+  border: 1px solid rgba(124, 138, 176, 0.28);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+
+.weapon-panel-icon {
+  height: 30px;
+  width: auto;
+  max-width: 116px;
+  object-fit: contain;
+  image-rendering: auto;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+.weapon-panel-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 118px;
+}
+
+.weapon-panel .weapon-name {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+.weapon-panel .ammo {
+  font-size: 24px;
+  line-height: 1.05;
+}
+
+.weapon-panel .ammo .reserve {
+  font-size: 14px;
+}
+
+.weapon-panel .reloading {
+  font-size: 14px;
+}
+
+.weapon-panel-grenades {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(124, 138, 176, 0.28);
+  color: var(--ac-dim);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.weapon-panel-grenades .pip {
+  width: 9px;
+  height: 11px;
+  border-radius: 4px 4px 5px 5px;
+  background: var(--ac-ok);
+  box-shadow: 0 0 6px rgba(85, 224, 140, 0.5);
 }

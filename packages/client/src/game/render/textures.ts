@@ -64,6 +64,36 @@ export const Frames = {
   Bar: 'bar',
 } as const;
 
+/**
+ * Crop one atlas frame into a standalone data URL, so DOM UI can show the
+ * exact same generated art the canvas draws — no second set of icons to keep
+ * in sync. Called once per weapon at boot; never in a hot path.
+ */
+export function frameDataUrl(scene: Phaser.Scene, frameName: string, scale = 2): string {
+  const texture = scene.textures.get(ATLAS);
+  const frame = texture.get(frameName);
+  const source = texture.getSourceImage();
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(frame.width * scale));
+  canvas.height = Math.max(1, Math.round(frame.height * scale));
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) return '';
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(
+    source as CanvasImageSource,
+    frame.cutX,
+    frame.cutY,
+    frame.width,
+    frame.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  return canvas.toDataURL();
+}
+
 /** Atlas frame name for a weapon's held silhouette. */
 export function weaponFrame(id: WeaponId): string {
   return `gun-${String(id)}`;

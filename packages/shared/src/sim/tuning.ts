@@ -32,8 +32,12 @@ export const TUNING = {
     spawnProtection: 2.5,
     /** Grenades carried at spawn. */
     spawnGrenades: 3,
-    /** Hard cap on carried grenades, so looting corpses cannot stockpile. */
-    maxGrenades: 5,
+    /**
+     * Hard cap on carried grenades. Equal to the spawn count, so a full
+     * loadout is the ceiling and looting tops you back up rather than
+     * stockpiling.
+     */
+    maxGrenades: 3,
     /**
      * Absolute speed ceiling after knockback stacking. Keeps per-tick
      * displacement well under one tile so swept collision can never tunnel.

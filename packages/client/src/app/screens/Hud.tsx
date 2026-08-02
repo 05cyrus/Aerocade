@@ -1,6 +1,11 @@
 import type { ReactElement } from 'react';
 import { appStore, useAppState } from '../store.js';
 
+/** Trim a zoom factor to at most one decimal: 1 → "1", 2.3 → "2.3". */
+function formatZoom(zoom: number): string {
+  return Number.isInteger(zoom) ? String(zoom) : zoom.toFixed(1);
+}
+
 export function Hud(): ReactElement {
   const hud = useAppState((s) => s.hud);
   const killFeed = useAppState((s) => s.killFeed);
@@ -8,6 +13,8 @@ export function Hud(): ReactElement {
   const prompt = useAppState((s) => s.prompt);
   const scoped = useAppState((s) => s.scoped);
   const scopeZoom = useAppState((s) => s.scopeZoom);
+  const weaponIcons = useAppState((s) => s.weaponIcons);
+  const icon = weaponIcons[hud.weaponId];
 
   const healthFrac = hud.maxHealth > 0 ? hud.health / hud.maxHealth : 0;
   const fuelFrac = hud.maxFuel > 0 ? hud.fuel / hud.maxFuel : 0;
@@ -29,19 +36,26 @@ export function Hud(): ReactElement {
         </div>
       </div>
 
-      <div className="hud-corner hud-bottom-right">
-        <div className="weapon-name">{hud.weaponName.toUpperCase()}</div>
-        <div className="ammo">
-          {hud.reloading ? (
-            <span className="reloading">RELOADING…</span>
-          ) : (
-            <>
-              {hud.ammoMag}
-              <span className="reserve"> / {hud.ammoReserve}</span>
-            </>
-          )}
+      <div className="weapon-panel">
+        {icon !== undefined && icon !== '' && (
+          <img className="weapon-panel-icon" src={icon} alt="" draggable={false} />
+        )}
+        <div className="weapon-panel-text">
+          <div className="weapon-name">{hud.weaponName.toUpperCase()}</div>
+          <div className="ammo">
+            {hud.reloading ? (
+              <span className="reloading">RELOADING…</span>
+            ) : (
+              <>
+                {hud.ammoMag}
+                <span className="reserve"> / {hud.ammoReserve}</span>
+              </>
+            )}
+          </div>
         </div>
-        <div className="grenades">GRENADES ×{hud.grenades}</div>
+        <div className="weapon-panel-grenades" title="Grenades">
+          <span className="pip" aria-hidden="true" />×{hud.grenades}
+        </div>
       </div>
 
       <div className="hud-corner hud-top-left">
@@ -62,7 +76,7 @@ export function Hud(): ReactElement {
         }}
       >
         <span className="scope-reticle" aria-hidden="true" />
-        <span className="scope-factor">{scopeZoom.toFixed(2).replace(/0$/, '')}×</span>
+        <span className="scope-factor">{formatZoom(scoped ? scopeZoom : 1)}×</span>
       </button>
 
       <div className="hud-corner hud-top-right">

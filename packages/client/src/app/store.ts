@@ -16,6 +16,7 @@ export interface HudState {
   ammoMag: number;
   ammoReserve: number;
   weaponName: string;
+  weaponId: number;
   grenades: number;
   reloading: boolean;
   kills: number;
@@ -55,6 +56,8 @@ export interface AppState {
   /** Scoped view active, and the zoom factor the held weapon provides. */
   scoped: boolean;
   scopeZoom: number;
+  /** Data-URL icon per WeaponId, cropped from the render atlas at boot. */
+  weaponIcons: readonly string[];
 }
 
 const initialHud: HudState = {
@@ -65,6 +68,7 @@ const initialHud: HudState = {
   ammoMag: 0,
   ammoReserve: 0,
   weaponName: '',
+  weaponId: 0,
   grenades: 0,
   reloading: false,
   kills: 0,
@@ -82,6 +86,7 @@ let state: AppState = {
   prompt: null,
   scoped: false,
   scopeZoom: 1,
+  weaponIcons: [],
 };
 
 const listeners = new Set<() => void>();
@@ -156,6 +161,11 @@ export const appStore = {
     const requested = scopeToggleRequested;
     scopeToggleRequested = false;
     return requested;
+  },
+  /** Publish the generated weapon icons once, after the atlas exists. */
+  setWeaponIcons(weaponIcons: readonly string[]): void {
+    state = { ...state, weaponIcons };
+    notify();
   },
   /** Publish scope state for the HUD; no-ops when nothing changed. */
   setScope(scoped: boolean, scopeZoom: number): void {

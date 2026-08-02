@@ -13,7 +13,7 @@ import {
   type SimWorld,
   type WeaponId,
 } from '@aerocade/shared';
-import { weaponDef } from '@aerocade/shared';
+import { WEAPON_COUNT, weaponDef } from '@aerocade/shared';
 import {
   ATLAS,
   Frames,
@@ -21,6 +21,7 @@ import {
   PLAYER_COLORS,
   PX_PER_M,
   RIG_SCALE,
+  frameDataUrl,
   weaponFrame,
 } from './textures.js';
 import { PlayerRig } from './PlayerRig.js';
@@ -262,6 +263,18 @@ export class ArenaScene extends Phaser.Scene {
     this.baseZoom = Math.max(w / (VIEW_WIDTH_M * PX_PER_M), h / (VIEW_HEIGHT_M * PX_PER_M));
     if (this.appliedZoom === 1) this.appliedZoom = this.baseZoom; // first sizing
     this.cameras.main.setZoom(this.appliedZoom);
+  }
+
+  /**
+   * One data-URL icon per weapon, cropped from the atlas so the HUD shows the
+   * same art the player sees in their hands. Built once, after textures exist.
+   */
+  weaponIcons(): string[] {
+    const icons: string[] = [];
+    for (let id = 0; id < WEAPON_COUNT; id++) {
+      icons.push(frameDataUrl(this, weaponFrame(id as WeaponId)));
+    }
+    return icons;
   }
 
   /** Toggle the scoped view. Purely a camera change — see ADR-016. */

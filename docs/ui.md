@@ -106,18 +106,23 @@ fixture format.
 
 The HUD is one absolutely-positioned layer over the canvas:
 
-| Element                                   | Data source                     | Update trigger                                                                                 |
-| ----------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Health bar + number                       | Local player pool slot          | 10 Hz poll + `hud:damage` event (instant on hit)                                               |
-| Fuel gauge                                | Jetpack fuel value              | 10 Hz poll (fuel drains smoothly; CSS transition tweens between polls)                         |
-| Ammo `mag / reserve` + reload spinner     | Weapon state                    | Event-driven: `weapon:fired`, `weapon:reload`, `weapon:switch`                                 |
-| Weapon icon + name                        | Equipped weapon id              | Event-driven on switch                                                                         |
-| Kill feed (last 5, 6 s TTL)               | `match:kill` events             | Event-driven; entries expire on a 1 Hz sweep                                                   |
-| Match timer + score summary               | Match system                    | 1 Hz poll                                                                                      |
-| Ping indicator                            | Transport RTT estimate          | 1 Hz poll ([networking.md](networking.md))                                                     |
-| Hit markers / damage direction arcs       | `hud:hit`, `hud:damaged` events | Event-driven, self-expiring via CSS animation                                                  |
-| Scoreboard                                | Roster + per-player stats       | Mounted only while `Tab` held (desktop) or scoreboard button held (mobile); 2 Hz while visible |
-| Spawn-protection ring / respawn countdown | Respawn system events           | Event-driven                                                                                   |
+| Element                                                             | Data source                           | Update trigger                                                                                                                                           |
+| ------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Health bar + number                                                 | Local player pool slot                | 10 Hz poll + `hud:damage` event (instant on hit)                                                                                                         |
+| Fuel gauge                                                          | Jetpack fuel value                    | 10 Hz poll (fuel drains smoothly; CSS transition tweens between polls)                                                                                   |
+| Weapon panel: icon + name + `mag / reserve` + grenades (top-center) | Local player loadout                  | Published the tick a **loadout signature** (weapon, mag, reserve, grenades, reloading) changes, plus the 10 Hz floor — so firing and reloading read live |
+| Scope button + current zoom (top-right)                             | Client scope flag + weapon `ScopeDef` | On toggle; shows the _effective_ zoom (`1×` unscoped), never the weapon's potential                                                                      |
+| Pickup button (right control zone)                                  | `findPickupUnderPlayer`               | On change only — grenades are excluded because they collect automatically                                                                                |
+| Kill feed (last 5, 6 s TTL)                                         | `match:kill` events                   | Event-driven; entries expire on a 1 Hz sweep                                                                                                             |
+| Match timer + score summary                                         | Match system                          | 1 Hz poll                                                                                                                                                |
+| Ping indicator                                                      | Transport RTT estimate                | 1 Hz poll ([networking.md](networking.md))                                                                                                               |
+| Hit markers / damage direction arcs                                 | `hud:hit`, `hud:damaged` events       | Event-driven, self-expiring via CSS animation                                                                                                            |
+| Scoreboard                                                          | Roster + per-player stats             | Mounted only while `Tab` held (desktop) or scoreboard button held (mobile); 2 Hz while visible                                                           |
+| Spawn-protection ring / respawn countdown                           | Respawn system events                 | Event-driven                                                                                                                                             |
+
+The weapon panel's icons are cropped out of the Phaser render atlas into data URLs once at scene
+start (`frameDataUrl`), so DOM UI shows the exact art the canvas draws and there is no second set
+of icons to keep in sync.
 
 **The cadence rule (load-bearing):** React renders are _never_ driven per frame. Two mechanisms
 feed the HUD, and nothing else:

@@ -13,6 +13,7 @@ import {
   type SimWorld,
   type WeaponId,
 } from '@aerocade/shared';
+import { weaponDef } from '@aerocade/shared';
 import {
   ATLAS,
   Frames,
@@ -34,6 +35,8 @@ const MAX_TRACERS = 32;
 const MAX_RINGS = 8;
 /** Pad disc sits just below the tile center so it reads as lying on the floor. */
 const PAD_DISC_OFFSET_PX = 15;
+/** Per-frame blend toward the scope's target zoom/offset at 60 fps. */
+const SCOPE_EASE_PER_FRAME = 0.12;
 /** Dropped gear fades over its last seconds so vanishing is not a pop. */
 const PICKUP_FADE_SECONDS = 3;
 /** Hover animation for a stocked pad's gun. */
@@ -100,6 +103,15 @@ export class ArenaScene extends Phaser.Scene {
 
   private readonly tracers: Tracer[] = [];
   private readonly rings: Ring[] = [];
+
+  /** Zoom that fits the design view size to the current viewport. */
+  private baseZoom = 1;
+  /** Eased toward the scoped/unscoped target so toggling never snaps. */
+  private appliedZoom = 1;
+  /** Eased camera slide toward the aim point, in pixels. */
+  private scopeOffsetX = 0;
+  private scopeOffsetY = 0;
+  private scoped = false;
 
   constructor(driver: SceneDriver, world: SimWorld, localPlayer: number) {
     super({ key: 'arena' });
@@ -247,8 +259,14 @@ export class ArenaScene extends Phaser.Scene {
   private applyZoom(): void {
     const w = this.scale.width;
     const h = this.scale.height;
-    const zoom = Math.max(w / (VIEW_WIDTH_M * PX_PER_M), h / (VIEW_HEIGHT_M * PX_PER_M));
-    this.cameras.main.setZoom(zoom);
+    this.baseZoom = Math.max(w / (VIEW_WIDTH_M * PX_PER_M), h / (VIEW_HEIGHT_M * PX_PER_M));
+    if (this.appliedZoom === 1) this.appliedZoom = this.baseZoom; // first sizing
+    this.cameras.main.setZoom(this.appliedZoom);
+  }
+
+  /** Toggle the scoped view. Purely a camera change — see ADR-016. */
+  setScoped(scoped: boolean): void {
+    this.scoped = scoped;
   }
 
   // ---------- per-frame rendering ----------
@@ -307,7 +325,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderPickups();
     this.renderProjectiles(interp, alpha);
     this.renderOverlay(deltaMs);
-    this.moveCamera(interp, alpha);
+    this.moveCamera(interp, alpha, deltaMs);
   }
 
   private hideHealthBar(player: number): void {
@@ -446,15 +464,39 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private moveCamera(interp: RenderInterpolator, alpha: number): void {
+  /**
+   * Follow the local player, leading slightly toward the crosshair. While
+   * scoped, widen the view and slide further down-range by the active
+   * weapon's scope profile — a sniper sees most of the arena, a shotgun
+   * barely more than usual. Both quantities ease so toggling never snaps.
+   */
+  private moveCamera(interp: RenderInterpolator, alpha: number, deltaMs: number): void {
     const i = this.localPlayer;
     const x = interp.playerX(i, alpha) * PX_PER_M;
     const y = interp.playerY(i, alpha) * PX_PER_M;
     const pointer = this.input.activePointer;
     pointer.updateWorldPoint(this.cameras.main);
+
+    const scope = weaponDef(
+      (this.world.players.weapons[i * WEAPON_SLOTS + (this.world.players.weaponSlot[i] ?? 0)] ??
+        0) as WeaponId,
+    ).scope;
+
+    // Frame-rate independent easing toward the current target.
+    const ease = 1 - Math.pow(1 - SCOPE_EASE_PER_FRAME, Math.max(deltaMs, 1) / 16.67);
+
+    const targetZoom = this.scoped ? this.baseZoom / scope.zoomOut : this.baseZoom;
+    this.appliedZoom += (targetZoom - this.appliedZoom) * ease;
+    this.cameras.main.setZoom(this.appliedZoom);
+
+    const aim = interp.playerAim(i, alpha);
+    const reach = this.scoped ? scope.lookAhead * PX_PER_M : 0;
+    this.scopeOffsetX += (Math.cos(aim) * reach - this.scopeOffsetX) * ease;
+    this.scopeOffsetY += (Math.sin(aim) * reach - this.scopeOffsetY) * ease;
+
     const lookX = (pointer.worldX - x) * AIM_LOOKAHEAD;
     const lookY = (pointer.worldY - y) * AIM_LOOKAHEAD;
-    this.cameraTarget.setPosition(x + lookX, y + lookY);
+    this.cameraTarget.setPosition(x + lookX + this.scopeOffsetX, y + lookY + this.scopeOffsetY);
   }
 
   // ---------- sim event visuals ----------

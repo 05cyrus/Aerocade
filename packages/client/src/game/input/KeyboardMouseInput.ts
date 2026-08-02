@@ -8,7 +8,10 @@ import { Buttons, type ButtonMask } from '@aerocade/shared';
  *
  * Bindings (docs/ui.md): A/D move, Space jump + jetpack, S hover,
  * Shift walk, LMB fire, RMB melee, G grenade, R reload, Q switch weapon,
- * E take the weapon on the pad you are standing on.
+ * E take the weapon on the pad you are standing on, Z toggle the scope.
+ *
+ * Z is deliberately not a sim button: scoping only reframes the camera, so it
+ * never reaches the simulation (ADR-016).
  */
 export class KeyboardMouseInput {
   private readonly down = new Set<string>();
@@ -21,6 +24,7 @@ export class KeyboardMouseInput {
     if (e.repeat) return;
     this.down.add(e.code);
     this.latched.add(e.code);
+    if (e.code === 'KeyZ') this.scopeToggled = true;
     if (e.code === 'Space') e.preventDefault(); // page scroll
   };
 
@@ -73,8 +77,11 @@ export class KeyboardMouseInput {
     return (this.mouseDown & bit) !== 0 || (this.mouseLatched & bit) !== 0;
   }
 
+  /** True once per Z press; consumed by the caller. Client-side only. */
+  private scopeToggled = false;
+
   /** Drain accumulated state into (moveX, moveY, buttons) for one tick. */
-  sample(): { moveX: number; moveY: number; buttons: ButtonMask } {
+  sample(): { moveX: number; moveY: number; buttons: ButtonMask; scopeToggled: boolean } {
     let moveX = 0;
     if (this.active('KeyA') || this.active('ArrowLeft')) moveX -= 1;
     if (this.active('KeyD') || this.active('ArrowRight')) moveX += 1;
@@ -94,8 +101,10 @@ export class KeyboardMouseInput {
     if (this.mouseActive(0)) buttons |= Buttons.Fire;
     if (this.mouseActive(2)) buttons |= Buttons.Melee;
 
+    const scopeToggled = this.scopeToggled;
+    this.scopeToggled = false;
     this.latched = new Set();
     this.mouseLatched = 0;
-    return { moveX, moveY, buttons };
+    return { moveX, moveY, buttons, scopeToggled };
   }
 }

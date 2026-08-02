@@ -11,8 +11,8 @@ import {
   createMatch,
   parseAsciiMap,
   weaponDef,
+  WeaponId,
   type SimWorld,
-  type WeaponId,
 } from '../src/index.js';
 import { addCombatant, Buttons, run, stage, teleport } from './helpers.js';
 
@@ -413,6 +413,102 @@ describe('death drops equipment', () => {
     // Keep the (respawned) player away from the loot while it ages out.
     run(world, Math.ceil(TUNING.pickups.dropTtl / SIM_DT) + 10);
     expect(groundItems(world, true)).toBe(0);
+  });
+});
+
+describe('grenades are picked up automatically when you have none', () => {
+  /** Drop a grenade bundle at a known clear spot and let it arm. */
+  function bundleAt(world: SimWorld, owner: number, x: number, y: number): number {
+    world.players.grenades[owner] = 2;
+    world.players.protect[owner] = 0;
+    world.players.health[owner] = 1;
+    world.damage.push(owner, 50, owner, 0, 0);
+    damageSystem(world);
+    run(world, Math.ceil(TUNING.pickups.dropArmDelay / SIM_DT) + 20);
+
+    let bundle = -1;
+    for (let i = 0; i < world.pickups.alive.length; i++) {
+      if (world.pickups.alive[i] === 1 && world.pickups.kind[i] === PickupKind.Grenades) bundle = i;
+    }
+    if (bundle === -1) throw new Error('no bundle');
+    // Park it clear of the pad gun and the other drops.
+    world.pickups.posX[bundle] = x;
+    world.pickups.posY[bundle] = y;
+    return bundle;
+  }
+
+  it('walks them up with no input at all when empty', () => {
+    const world = padRoom();
+    const owner = addCombatant(world);
+    const looter = addCombatant(world);
+    run(world, 5);
+    const bundle = bundleAt(world, owner, 8.5, 3.4);
+
+    world.players.grenades[looter] = 0; // out of grenades
+    teleport(world, looter, 8.5, 3.4);
+    stage(world, looter, {}); // no buttons whatsoever
+    run(world, 1);
+
+    expect(world.players.grenades[looter]).toBe(2);
+    expect(world.pickups.alive[bundle]).toBe(0);
+  });
+
+  it('still needs a press when you already carry some', () => {
+    const world = padRoom();
+    const owner = addCombatant(world);
+    const looter = addCombatant(world);
+    run(world, 5);
+    const bundle = bundleAt(world, owner, 8.5, 3.4);
+
+    world.players.grenades[looter] = 1; // not empty
+    teleport(world, looter, 8.5, 3.4);
+    stage(world, looter, {});
+    run(world, 30);
+    expect(world.players.grenades[looter]).toBe(1);
+    expect(world.pickups.alive[bundle]).toBe(1);
+
+    teleport(world, looter, 8.5, 3.4);
+    stage(world, looter, { buttons: Buttons.Interact });
+    run(world, 1);
+    expect(world.players.grenades[looter]).toBe(3);
+  });
+
+  it('never auto-collects weapons, only grenades', () => {
+    const world = padRoom();
+    const p = addCombatant(world);
+    const pad = world.map.weaponPads[0];
+    if (pad === undefined) throw new Error('no pad');
+    world.players.grenades[p] = 0; // empty, but that must not grab guns
+    teleport(world, p, pad.x, pad.y);
+    stage(world, p, {});
+    run(world, 60);
+    expect(padStocked(world, 0)).toBe(true);
+  });
+});
+
+describe('weapon scopes', () => {
+  it('every weapon defines a distinct, sane scope', () => {
+    const zooms = new Set<number>();
+    for (let id = 0; id < WEAPON_COUNT; id++) {
+      const { scope, name } = weaponDef(id as WeaponId);
+      expect(scope.zoomOut, name).toBeGreaterThanOrEqual(1);
+      expect(scope.zoomOut, name).toBeLessThanOrEqual(3);
+      expect(scope.lookAhead, name).toBeGreaterThanOrEqual(0);
+      zooms.add(scope.zoomOut);
+    }
+    // Not every weapon has to be unique, but the roster must offer real choice.
+    expect(zooms.size).toBeGreaterThanOrEqual(5);
+  });
+
+  it('the sniper sees furthest and the shotgun least', () => {
+    const sniper = weaponDef(WeaponId.LongboltRifle).scope;
+    const shotgun = weaponDef(WeaponId.Scattergun).scope;
+    for (let id = 0; id < WEAPON_COUNT; id++) {
+      const scope = weaponDef(id as WeaponId).scope;
+      expect(scope.zoomOut).toBeLessThanOrEqual(sniper.zoomOut);
+      expect(scope.lookAhead).toBeLessThanOrEqual(sniper.lookAhead);
+      expect(scope.zoomOut).toBeGreaterThanOrEqual(shotgun.zoomOut);
+    }
   });
 });
 

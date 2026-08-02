@@ -415,3 +415,88 @@ body,
     transform: scale(1);
   }
 }
+
+/* ---------- Scope button ---------- */
+
+/*
+ * Top-right circular scope toggle. Sits opposite the pickup button so the two
+ * thumb targets never collide on a phone, and clear of the kill feed below it.
+ */
+.scope-button {
+  pointer-events: auto;
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  top: max(12px, env(safe-area-inset-top));
+  width: 62px;
+  height: 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 50%;
+  color: var(--ac-dim);
+  background: rgba(13, 20, 40, 0.82);
+  border: 2px solid rgba(124, 138, 176, 0.45);
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    color 0.12s,
+    box-shadow 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.scope-button:active {
+  transform: scale(0.95);
+}
+
+.scope-button.active {
+  color: var(--ac-accent2);
+  border-color: var(--ac-accent2);
+  box-shadow:
+    0 0 16px rgba(60, 214, 255, 0.5),
+    inset 0 0 12px rgba(60, 214, 255, 0.18);
+}
+
+/* Crosshair reticle drawn in CSS: ring plus four ticks. */
+.scope-reticle {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.scope-reticle::before,
+.scope-reticle::after {
+  content: '';
+  position: absolute;
+  background: currentColor;
+}
+
+.scope-reticle::before {
+  left: 50%;
+  top: -5px;
+  bottom: -5px;
+  width: 2px;
+  transform: translateX(-50%);
+}
+
+.scope-reticle::after {
+  top: 50%;
+  left: -5px;
+  right: -5px;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.scope-factor {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The kill feed sits below the scope button rather than under it. */
+.hud-top-right {
+  top: calc(max(12px, env(safe-area-inset-top)) + 72px);
+}

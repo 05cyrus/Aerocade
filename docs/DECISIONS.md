@@ -242,6 +242,28 @@ pool of ground objects and pads became pure spawners.
 Health and ammo pads remain the natural next kinds: another `PickupKind` and a branch in
 `collect`, not a new architecture.
 
+## ADR-016: Empty-handed grenade pickup, and scopes as a camera-only concern
+
+**Grenades auto-collect when you have none.** Being unable to answer a grenade because you had
+to remember a button is a frustration, not a decision. With any grenades in hand it goes back
+to a deliberate press — so the auto-grab is a safety net, never a vacuum that fills your
+pockets as you run. Weapons are never auto-collected; swapping your gun must always be a choice
+(ADR-014).
+
+**Scope never touches the simulation.** Each weapon carries a `ScopeDef` — a zoom-out factor
+and a look-ahead distance — and the scope button reframes the camera by them. It is declared in
+`weapon-defs.ts` because how far a weapon lets you see is part of that weapon's design, but the
+sim never reads it:
+
+- Scoping changes **what you can see, never what you can hit**. Accuracy, range, and damage are
+  untouched, so a scoped player has no hidden combat advantage the host would have to validate.
+- It therefore stays client state and needs no protocol field, no snapshot bytes, and no
+  reconciliation. `Z` is deliberately _not_ a `Buttons` bit for the same reason.
+
+Profiles run from the Scattergun (1.1×, 2 m — point blank by design) to the Longbolt Rifle
+(2.3×, 15 m — sees most of the arena), so picking up a sniper genuinely changes how you read
+the map. Zoom and offset both ease frame-rate independently; toggling never snaps.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

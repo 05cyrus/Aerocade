@@ -52,6 +52,9 @@ export interface AppState {
   pickup: PickupNotice | null;
   /** Non-null while the pickup button should be on screen. */
   prompt: PickupPrompt | null;
+  /** Scoped view active, and the zoom factor the held weapon provides. */
+  scoped: boolean;
+  scopeZoom: number;
 }
 
 const initialHud: HudState = {
@@ -77,6 +80,8 @@ let state: AppState = {
   killFeed: [],
   pickup: null,
   prompt: null,
+  scoped: false,
+  scopeZoom: 1,
 };
 
 const listeners = new Set<() => void>();
@@ -89,6 +94,8 @@ let pickupTimer: ReturnType<typeof setTimeout> | null = null;
  * of React state deliberately — it is input, not something to render.
  */
 let interactRequested = false;
+/** Same one-shot pattern for the scope button. */
+let scopeToggleRequested = false;
 
 function notify(): void {
   for (const l of listeners) l();
@@ -107,8 +114,17 @@ export const appStore = {
   reset(): void {
     if (pickupTimer !== null) clearTimeout(pickupTimer);
     pickupTimer = null;
-    state = { ...state, hud: { ...initialHud }, killFeed: [], pickup: null, prompt: null };
+    state = {
+      ...state,
+      hud: { ...initialHud },
+      killFeed: [],
+      pickup: null,
+      prompt: null,
+      scoped: false,
+      scopeZoom: 1,
+    };
     interactRequested = false;
+    scopeToggleRequested = false;
     notify();
   },
   /** Show or hide the pickup button; no-ops when nothing changed. */
@@ -131,6 +147,21 @@ export const appStore = {
   /** Called by the pickup button (tap or click). */
   requestInteract(): void {
     interactRequested = true;
+  },
+  /** Called by the scope button (tap or click). */
+  requestScopeToggle(): void {
+    scopeToggleRequested = true;
+  },
+  consumeScopeToggle(): boolean {
+    const requested = scopeToggleRequested;
+    scopeToggleRequested = false;
+    return requested;
+  },
+  /** Publish scope state for the HUD; no-ops when nothing changed. */
+  setScope(scoped: boolean, scopeZoom: number): void {
+    if (state.scoped === scoped && state.scopeZoom === scopeZoom) return;
+    state = { ...state, scoped, scopeZoom };
+    notify();
   },
   /** Called once per sim tick by the game loop. */
   consumeInteract(): boolean {

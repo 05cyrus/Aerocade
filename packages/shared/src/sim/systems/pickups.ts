@@ -290,13 +290,26 @@ export function findPickupUnderPlayer(world: SimWorld, player: number): number {
 }
 
 /**
- * Lowest-indexed player on the item who pressed interact this tick, or -1.
- * Ties resolve by index so hosts and replays agree (ADR-009).
+ * A player out of grenades sweeps one up just by walking over it — being
+ * unable to answer a grenade because you had to remember a button is a
+ * frustration, not a decision. Any grenades in hand and it goes back to a
+ * deliberate press (ADR-016).
+ */
+function autoCollects(world: SimWorld, player: number, pickup: number): boolean {
+  if ((world.pickups.kind[pickup] as PickupKind) !== PickupKind.Grenades) return false;
+  return (world.players.grenades[player] ?? 0) === 0;
+}
+
+/**
+ * Lowest-indexed player on the item who either pressed interact this tick or
+ * qualifies for automatic pickup, or -1. Ties resolve by index so hosts and
+ * replays agree (ADR-009).
  */
 function findCollector(world: SimWorld, pickup: number): number {
   const p = world.players;
   for (let t = 0; t < MAX_PLAYERS; t++) {
     if (!playerReachesPickup(world, t, pickup)) continue;
+    if (autoCollects(world, t, pickup)) return t;
     const cmd = world.inputs[t];
     if (cmd === undefined) continue;
     const pressed = cmd.buttons & ~(p.prevButtons[t] ?? 0);

@@ -20,6 +20,19 @@ export type WeaponId = (typeof WeaponId)[keyof typeof WeaponId];
 
 export const WEAPON_COUNT = 7;
 
+/**
+ * Scoped-view camera settings — **presentation only**. The simulation never
+ * reads these: scoping changes what you can see, never what you can hit, so
+ * it stays a client-side camera concern (ADR-016). They live here because how
+ * far a weapon lets you see is part of that weapon's design.
+ */
+export interface ScopeDef {
+  /** Multiplier on the visible world width while scoped (1 = no change). */
+  zoomOut: number;
+  /** Metres the camera slides toward the aim point while scoped. */
+  lookAhead: number;
+}
+
 export interface SplashDef {
   radius: number;
   maxDamage: number;
@@ -71,6 +84,8 @@ export interface WeaponDef {
   recoilKick: number;
   /** Impulse multiplier on hitscan targets (scaled by damage dealt). */
   knockbackMult: number;
+  /** How this weapon's scope reframes the view. */
+  scope: ScopeDef;
   projectile?: ProjectileDef;
 }
 
@@ -94,6 +109,8 @@ const defs: Record<WeaponId, WeaponDef> = {
     falloffStart: 22,
     recoilKick: 0.6,
     knockbackMult: 1,
+    // sidearm: a glance down-range, nothing more
+    scope: { zoomOut: 1.25, lookAhead: 4 },
   },
   [WeaponId.VortexSmg]: {
     id: WeaponId.VortexSmg,
@@ -114,6 +131,8 @@ const defs: Record<WeaponId, WeaponDef> = {
     falloffStart: 12,
     recoilKick: 0.35,
     knockbackMult: 0.8,
+    // close quarters; the scope barely helps
+    scope: { zoomOut: 1.2, lookAhead: 3 },
   },
   [WeaponId.PulseRifle]: {
     id: WeaponId.PulseRifle,
@@ -134,6 +153,8 @@ const defs: Record<WeaponId, WeaponDef> = {
     falloffStart: 20,
     recoilKick: 0.5,
     knockbackMult: 1,
+    // mid-range workhorse
+    scope: { zoomOut: 1.5, lookAhead: 6.5 },
   },
   [WeaponId.Scattergun]: {
     id: WeaponId.Scattergun,
@@ -154,6 +175,8 @@ const defs: Record<WeaponId, WeaponDef> = {
     falloffStart: 5,
     recoilKick: 3.2,
     knockbackMult: 1.4,
+    // point blank by design — almost no scope
+    scope: { zoomOut: 1.1, lookAhead: 2 },
   },
   [WeaponId.LongboltRifle]: {
     id: WeaponId.LongboltRifle,
@@ -174,6 +197,8 @@ const defs: Record<WeaponId, WeaponDef> = {
     falloffStart: 70,
     recoilKick: 2.4,
     knockbackMult: 2,
+    // the true sniper: sees most of the arena
+    scope: { zoomOut: 2.3, lookAhead: 15 },
   },
   [WeaponId.Thumper]: {
     id: WeaponId.Thumper,
@@ -194,6 +219,8 @@ const defs: Record<WeaponId, WeaponDef> = {
     falloffStart: 0,
     recoilKick: 4.5,
     knockbackMult: 0,
+    // lob rockets at targets you could not otherwise see
+    scope: { zoomOut: 1.65, lookAhead: 9 },
     projectile: {
       speed: 24,
       gravityFactor: 0,
@@ -222,6 +249,8 @@ const defs: Record<WeaponId, WeaponDef> = {
     falloffStart: 0,
     recoilKick: 1.8,
     knockbackMult: 0,
+    // arcing shots need to see where they land
+    scope: { zoomOut: 1.5, lookAhead: 7 },
     projectile: {
       speed: 16,
       gravityFactor: 1,

@@ -6,6 +6,8 @@ export function Hud(): ReactElement {
   const killFeed = useAppState((s) => s.killFeed);
   const pickup = useAppState((s) => s.pickup);
   const prompt = useAppState((s) => s.prompt);
+  const scoped = useAppState((s) => s.scoped);
+  const scopeZoom = useAppState((s) => s.scopeZoom);
 
   const healthFrac = hud.maxHealth > 0 ? hud.health / hud.maxHealth : 0;
   const fuelFrac = hud.maxFuel > 0 ? hud.fuel / hud.maxFuel : 0;
@@ -48,6 +50,20 @@ export function Hud(): ReactElement {
         </div>
         <div className="scorebox">{hud.fps} FPS</div>
       </div>
+
+      <button
+        type="button"
+        className={`scope-button${scoped ? ' active' : ''}`}
+        aria-pressed={scoped}
+        aria-label={scoped ? 'Disable scope' : 'Enable scope'}
+        onPointerDown={(e) => {
+          e.preventDefault(); // keep keyboard focus on the game
+          appStore.requestScopeToggle();
+        }}
+      >
+        <span className="scope-reticle" aria-hidden="true" />
+        <span className="scope-factor">{scopeZoom.toFixed(2).replace(/0$/, '')}×</span>
+      </button>
 
       <div className="hud-corner hud-top-right">
         <div className="killfeed">

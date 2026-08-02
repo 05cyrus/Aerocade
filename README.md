@@ -158,6 +158,7 @@ Offline capabilities, precisely:
 | `R`                       | Reload                                                                      |
 | `Q`                       | Switch weapon                                                               |
 | `E`                       | Take the weapon off the pad you're standing on (or tap the circular button) |
+| `Z`                       | Toggle the weapon scope (or tap the reticle button, top right)              |
 | `Tab`                     | Scoreboard (planned, M4)                                                    |
 | `Esc`                     | Pause (planned, M5)                                                         |
 

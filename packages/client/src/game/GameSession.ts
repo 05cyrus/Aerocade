@@ -61,6 +61,8 @@ export class GameSession implements SceneDriver {
   private accumulator = 0;
   private lastAim = 0;
   private lastFrameAt = 0;
+  /** Scoped view. Client-only camera state — never reaches the sim (ADR-016). */
+  private scoped = false;
   private destroyed = false;
 
   constructor(parent: HTMLElement) {
@@ -133,6 +135,12 @@ export class GameSession implements SceneDriver {
     // The on-screen pickup button feeds the same input path as the E key, so
     // the simulation cannot tell tap from keypress.
     const buttons = sampled.buttons | (appStore.consumeInteract() ? Buttons.Interact : 0);
+    // Scope is presentation: the Z key and the on-screen button both flip a
+    // client flag the camera reads; nothing about it enters the simulation.
+    if (sampled.scopeToggled || appStore.consumeScopeToggle()) {
+      this.scoped = !this.scoped;
+    }
+    scene.setScoped(this.scoped);
     this.lastAim = scene.computeAimFor(this.localPlayer, this.interp);
     setInput(this.world, this.localPlayer, {
       seq: this.world.tick,
@@ -149,6 +157,7 @@ export class GameSession implements SceneDriver {
     scene.emitTickEffects(this.world);
     this.consumeEvents();
     this.publishPrompt();
+    this.publishScope();
 
     if (this.world.tick % HUD_EVERY_TICKS === 0) this.publishHud();
   }
@@ -212,6 +221,14 @@ export class GameSession implements SceneDriver {
     }
     const weaponId = (pk.weapon[slot] ?? 0) as WeaponId;
     appStore.setPrompt({ weaponId, weaponName: weaponDef(weaponId).name });
+  }
+
+  /** Keep the HUD's scope button in sync with the held weapon's zoom. */
+  private publishScope(): void {
+    const p = this.world.players;
+    const i = this.localPlayer;
+    const id = (p.weapons[i * WEAPON_SLOTS + (p.weaponSlot[i] ?? 0)] ?? 0) as WeaponId;
+    appStore.setScope(this.scoped, weaponDef(id).scope.zoomOut);
   }
 
   private nameOf(slot: number): string {

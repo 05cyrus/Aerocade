@@ -17,6 +17,9 @@ export interface HudState {
   ammoReserve: number;
   weaponName: string;
   weaponId: number;
+  /** The weapon in the other slot — what tapping the panel switches to. */
+  otherWeaponId: number;
+  otherWeaponName: string;
   grenades: number;
   reloading: boolean;
   kills: number;
@@ -69,6 +72,8 @@ const initialHud: HudState = {
   ammoReserve: 0,
   weaponName: '',
   weaponId: 0,
+  otherWeaponId: 0,
+  otherWeaponName: '',
   grenades: 0,
   reloading: false,
   kills: 0,
@@ -101,6 +106,8 @@ let pickupTimer: ReturnType<typeof setTimeout> | null = null;
 let interactRequested = false;
 /** Same one-shot pattern for the scope button. */
 let scopeToggleRequested = false;
+/** ...and for tapping the weapon panel to switch weapons. */
+let weaponSwitchRequested = false;
 
 function notify(): void {
   for (const l of listeners) l();
@@ -130,6 +137,7 @@ export const appStore = {
     };
     interactRequested = false;
     scopeToggleRequested = false;
+    weaponSwitchRequested = false;
     notify();
   },
   /** Show or hide the pickup button; no-ops when nothing changed. */
@@ -152,6 +160,15 @@ export const appStore = {
   /** Called by the pickup button (tap or click). */
   requestInteract(): void {
     interactRequested = true;
+  },
+  /** Called by tapping the weapon panel. */
+  requestWeaponSwitch(): void {
+    weaponSwitchRequested = true;
+  },
+  consumeWeaponSwitch(): boolean {
+    const requested = weaponSwitchRequested;
+    weaponSwitchRequested = false;
+    return requested;
   },
   /** Called by the scope button (tap or click). */
   requestScopeToggle(): void {

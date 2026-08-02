@@ -21,6 +21,21 @@ export type WeaponId = (typeof WeaponId)[keyof typeof WeaponId];
 export const WEAPON_COUNT = 7;
 
 /**
+ * Which inventory slot a weapon occupies. The values are the slot indices
+ * themselves, so `weapons[player * WEAPON_SLOTS + def.slot]` is the weapon's
+ * only legal home: a primary can never displace a sidearm and vice versa
+ * (ADR-017).
+ */
+export const WeaponSlot = {
+  /** The big guns: SMGs, rifles, shotguns, snipers, launchers. */
+  Primary: 0,
+  /** Sidearms — the fallback you always have when the primary runs dry. */
+  Secondary: 1,
+} as const;
+
+export type WeaponSlot = (typeof WeaponSlot)[keyof typeof WeaponSlot];
+
+/**
  * Scoped-view camera settings — **presentation only**. The simulation never
  * reads these: scoping changes what you can see, never what you can hit, so
  * it stays a client-side camera concern (ADR-016). They live here because how
@@ -84,6 +99,8 @@ export interface WeaponDef {
   recoilKick: number;
   /** Impulse multiplier on hitscan targets (scaled by damage dealt). */
   knockbackMult: number;
+  /** Inventory slot this weapon lives in; pickups only ever replace their own. */
+  slot: WeaponSlot;
   /** How this weapon's scope reframes the view. */
   scope: ScopeDef;
   projectile?: ProjectileDef;
@@ -92,6 +109,8 @@ export interface WeaponDef {
 const defs: Record<WeaponId, WeaponDef> = {
   [WeaponId.RivetPistol]: {
     id: WeaponId.RivetPistol,
+    // a sidearm: the gun you always still have
+    slot: WeaponSlot.Secondary,
     name: 'Rivet Pistol',
     category: 'hitscan',
     damage: 16,
@@ -114,6 +133,7 @@ const defs: Record<WeaponId, WeaponDef> = {
   },
   [WeaponId.VortexSmg]: {
     id: WeaponId.VortexSmg,
+    slot: WeaponSlot.Primary,
     name: 'Vortex SMG',
     category: 'hitscan',
     damage: 9,
@@ -136,6 +156,7 @@ const defs: Record<WeaponId, WeaponDef> = {
   },
   [WeaponId.PulseRifle]: {
     id: WeaponId.PulseRifle,
+    slot: WeaponSlot.Primary,
     name: 'Pulse Rifle',
     category: 'hitscan',
     damage: 14,
@@ -158,6 +179,7 @@ const defs: Record<WeaponId, WeaponDef> = {
   },
   [WeaponId.Scattergun]: {
     id: WeaponId.Scattergun,
+    slot: WeaponSlot.Primary,
     name: 'Scattergun',
     category: 'hitscan',
     damage: 9,
@@ -180,6 +202,7 @@ const defs: Record<WeaponId, WeaponDef> = {
   },
   [WeaponId.LongboltRifle]: {
     id: WeaponId.LongboltRifle,
+    slot: WeaponSlot.Primary,
     name: 'Longbolt Rifle',
     category: 'hitscan',
     damage: 70,
@@ -202,6 +225,7 @@ const defs: Record<WeaponId, WeaponDef> = {
   },
   [WeaponId.Thumper]: {
     id: WeaponId.Thumper,
+    slot: WeaponSlot.Primary,
     name: 'Thumper',
     category: 'projectile',
     damage: 0,
@@ -232,6 +256,7 @@ const defs: Record<WeaponId, WeaponDef> = {
   },
   [WeaponId.Lobber]: {
     id: WeaponId.Lobber,
+    slot: WeaponSlot.Primary,
     name: 'Lobber',
     category: 'projectile',
     damage: 0,
@@ -270,8 +295,20 @@ export function isWeaponId(value: number): value is WeaponId {
   return Number.isInteger(value) && value >= 0 && value < WEAPON_COUNT;
 }
 
-/** Weapons every player spawns with in the sandbox and default loadout. */
+/**
+ * Spawn loadout, indexed by slot: `[primary, secondary]`. Each entry must
+ * belong to the slot it sits in — `weaponsMatchTheirSlots` asserts it.
+ */
 export const DEFAULT_LOADOUT: readonly [WeaponId, WeaponId] = [
   WeaponId.VortexSmg,
-  WeaponId.Thumper,
+  WeaponId.RivetPistol,
 ];
+
+/** Every weapon of a given slot, for roster checks and future loadout UI. */
+export function weaponsInSlot(slot: WeaponSlot): WeaponId[] {
+  const out: WeaponId[] = [];
+  for (let id = 0; id < WEAPON_COUNT; id++) {
+    if (defs[id as WeaponId].slot === slot) out.push(id as WeaponId);
+  }
+  return out;
+}

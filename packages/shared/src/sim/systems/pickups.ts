@@ -376,8 +376,12 @@ function collect(world: SimWorld, player: number, pickup: number): void {
 /**
  * Equip a weapon off the ground. Already carrying it merges the ammo into
  * that slot instead of swapping, so a duplicate is never a downgrade.
- * Otherwise the weapon currently in the active slot is **dropped at the
- * player's feet with the ammo it had left** and replaced.
+ *
+ * Otherwise it replaces **the weapon in its own slot** — a rifle can only
+ * displace your rifle, a sidearm only your sidearm (ADR-017) — and the gun
+ * that came out is dropped at the player's feet with the ammo it had left.
+ * The player also switches to what they just picked up, since the pickup was
+ * a deliberate press.
  *
  * Returns true when it was an ammo merge rather than a swap.
  */
@@ -400,7 +404,8 @@ function takeWeapon(
     }
   }
 
-  const idx = player * WEAPON_SLOTS + (p.weaponSlot[player] ?? 0);
+  const slot = def.slot;
+  const idx = player * WEAPON_SLOTS + slot;
   dropItem(world, player, {
     kind: PickupKind.Weapon,
     weapon: p.weapons[idx] ?? 0,
@@ -412,6 +417,7 @@ function takeWeapon(
   p.weapons[idx] = weapon;
   p.ammoMag[idx] = mag;
   p.ammoReserve[idx] = reserve;
+  p.weaponSlot[player] = slot; // you asked for it, so you are holding it
   // A swap interrupts whatever the old weapon was doing.
   p.reload[player] = 0;
   p.bloom[player] = 0;

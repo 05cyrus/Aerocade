@@ -496,6 +496,11 @@ body,
  * changes rather than on the HUD's 10 Hz poll.
  */
 .weapon-panel {
+  pointer-events: auto;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   position: absolute;
   top: max(52px, calc(env(safe-area-inset-top) + 52px));
   left: 50%;
@@ -511,6 +516,40 @@ body,
   border: 1px solid rgba(124, 138, 176, 0.28);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   white-space: nowrap;
+  transition:
+    border-color 0.12s,
+    transform 0.05s;
+}
+
+.weapon-panel:hover {
+  border-color: rgba(60, 214, 255, 0.55);
+}
+
+.weapon-panel:active {
+  transform: translateX(-50%) scale(0.98);
+}
+
+/* The other slot, shown so the tap target reads as "switch to that". */
+.weapon-panel-swap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(124, 138, 176, 0.28);
+  opacity: 0.62;
+}
+
+.swap-glyph {
+  color: var(--ac-accent2);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.weapon-panel-other {
+  height: 18px;
+  width: auto;
+  max-width: 62px;
+  object-fit: contain;
 }
 
 .weapon-panel-icon {
@@ -595,6 +634,16 @@ body,
 
   .weapon-panel-grenades {
     padding-left: 8px;
+  }
+
+  .weapon-panel-swap {
+    padding-left: 8px;
+    gap: 4px;
+  }
+
+  .weapon-panel-other {
+    height: 14px;
+    max-width: 46px;
   }
 
   /* Keep the kill feed and banners clear of the relocated panel. */

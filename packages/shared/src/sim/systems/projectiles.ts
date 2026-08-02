@@ -1,4 +1,5 @@
 import { MAX_PLAYERS, MAX_PROJECTILES, SIM_DT } from '../../constants.js';
+import { approach } from '../../math/scalar.js';
 import { SimEventType } from '../events.js';
 import { explode } from '../combat/explosions.js';
 import { weaponDef, type WeaponId } from '../combat/weapon-defs.js';
@@ -58,7 +59,12 @@ export function projectilesSystem(world: SimWorld): void {
     if (gravityFactor > 0 && !resting) {
       velY += TUNING.player.gravity * gravityFactor * SIM_DT;
     }
-    if (resting && Math.abs(velX) < SETTLE_SPEED) velX = 0;
+    if (resting) {
+      // Drag a resting grenade to a halt instead of letting it skate off at
+      // whatever speed it landed with.
+      velX = approach(velX, 0, g.groundFriction * SIM_DT);
+      if (Math.abs(velX) < SETTLE_SPEED) velX = 0;
+    }
 
     // X axis
     const nextX = posX + velX * SIM_DT;

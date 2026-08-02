@@ -8,7 +8,7 @@ import {
   WeaponId,
   weaponDef,
 } from '../src/index.js';
-import { addCombatant, Buttons, createTestWorld, run, stage, teleport } from './helpers.js';
+import { addCombatant, Buttons, createTestWorld, equip, run, stage, teleport } from './helpers.js';
 
 describe('spawn protection', () => {
   it('absorbs damage while active and expires on schedule', () => {
@@ -74,10 +74,7 @@ describe('death, scoring, and respawn', () => {
     run(world, 10);
     world.players.health[a] = 5;
     // Fire a rocket point-blank into the floor.
-    stage(world, a, { buttons: Buttons.SwitchWeapon });
-    run(world, 1);
-    stage(world, a, {});
-    run(world, 20);
+    equip(world, a, WeaponId.Thumper);
     stage(world, a, { buttons: Buttons.Fire, aim: Math.PI / 2 }); // straight down
     run(world, 30);
 
@@ -99,10 +96,7 @@ describe('projectiles', () => {
     world.players.protect[b] = 0;
     run(world, 5); // both settle onto the floor
 
-    stage(world, a, { buttons: Buttons.SwitchWeapon });
-    run(world, 1);
-    stage(world, a, {});
-    run(world, 20);
+    equip(world, a, WeaponId.Thumper);
     // Aim over b's head so the rocket detonates on the wall above them —
     // splash, not a direct hit, is what this test exercises.
     const aimAtWall = Math.atan2(
@@ -139,10 +133,7 @@ describe('projectiles', () => {
     const world = createTestWorld();
     const a = addCombatant(world);
     run(world, 10);
-    stage(world, a, { buttons: Buttons.SwitchWeapon });
-    run(world, 1);
-    stage(world, a, {});
-    run(world, 20);
+    equip(world, a, WeaponId.Thumper);
     const healthBefore = world.players.health[a] ?? 0;
     stage(world, a, { buttons: Buttons.Fire, aim: Math.PI / 2 });
     run(world, 6); // rocket travels ~0.6 m to the floor and detonates
@@ -154,10 +145,7 @@ describe('projectiles', () => {
     const world = createTestWorld();
     const a = addCombatant(world);
     run(world, 10);
-    stage(world, a, { buttons: Buttons.SwitchWeapon });
-    run(world, 1);
-    stage(world, a, {});
-    run(world, 20);
+    equip(world, a, WeaponId.Thumper);
     stage(world, a, { buttons: Buttons.Fire, aim: 0 });
     run(world, 1);
     stage(world, a, {});

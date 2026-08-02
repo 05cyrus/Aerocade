@@ -135,7 +135,12 @@ export class GameSession implements SceneDriver {
     const sampled = this.input.sample();
     // The on-screen pickup button feeds the same input path as the E key, so
     // the simulation cannot tell tap from keypress.
-    const buttons = sampled.buttons | (appStore.consumeInteract() ? Buttons.Interact : 0);
+    // Both on-screen buttons feed the normal input path, so the simulation
+    // cannot tell a tap from a keypress.
+    const buttons =
+      sampled.buttons |
+      (appStore.consumeInteract() ? Buttons.Interact : 0) |
+      (appStore.consumeWeaponSwitch() ? Buttons.SwitchWeapon : 0);
     // Scope is presentation: the Z key and the on-screen button both flip a
     // client flag the camera reads; nothing about it enters the simulation.
     // Both sources are read unconditionally — short-circuiting past
@@ -234,9 +239,10 @@ export class GameSession implements SceneDriver {
     const i = this.localPlayer;
     const slot = p.weaponSlot[i] ?? 0;
     const idx = i * WEAPON_SLOTS + slot;
+    const other = i * WEAPON_SLOTS + ((slot + 1) % WEAPON_SLOTS);
     return `${String(p.weapons[idx])}:${String(p.ammoMag[idx])}:${String(
       p.ammoReserve[idx],
-    )}:${String(p.grenades[i])}:${String((p.reload[i] ?? 0) > 0)}`;
+    )}:${String(p.grenades[i])}:${String((p.reload[i] ?? 0) > 0)}:${String(p.weapons[other])}`;
   }
 
   /** Keep the HUD's scope button in sync with the held weapon's zoom. */
@@ -260,6 +266,8 @@ export class GameSession implements SceneDriver {
     const slot = p.weaponSlot[i] ?? 0;
     const slotIndex = i * WEAPON_SLOTS + slot;
     const def = weaponDef((p.weapons[slotIndex] ?? DEFAULT_LOADOUT[0]) as WeaponId);
+    const otherIndex = i * WEAPON_SLOTS + ((slot + 1) % WEAPON_SLOTS);
+    const otherDef = weaponDef((p.weapons[otherIndex] ?? DEFAULT_LOADOUT[1]) as WeaponId);
 
     const hud: HudState = {
       health: Math.max(0, Math.round(p.health[i] ?? 0)),
@@ -270,6 +278,8 @@ export class GameSession implements SceneDriver {
       ammoReserve: p.ammoReserve[slotIndex] ?? 0,
       weaponName: def.name,
       weaponId: def.id,
+      otherWeaponId: otherDef.id,
+      otherWeaponName: otherDef.name,
       grenades: p.grenades[i] ?? 0,
       reloading: (p.reload[i] ?? 0) > 0,
       kills: p.kills[i] ?? 0,

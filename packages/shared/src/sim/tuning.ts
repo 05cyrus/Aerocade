@@ -85,6 +85,12 @@ export const TUNING = {
     restitution: 0.45,
     /** Tangential velocity kept on each bounce. */
     bounceFriction: 0.8,
+    /**
+     * Deceleration applied to a grenade resting on a surface, m/s². Without
+     * it a settled grenade keeps whatever horizontal speed it landed with
+     * and skates away; this brings it to a stop in a few tenths of a second.
+     */
+    groundFriction: 26,
     gravityFactor: 1,
   },
   combat: {

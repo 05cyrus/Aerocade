@@ -20,6 +20,7 @@ export function Hud(): ReactElement {
   const scopeZoom = useAppState((s) => s.scopeZoom);
   const weaponIcons = useAppState((s) => s.weaponIcons);
   const icon = weaponIcons[hud.weaponId];
+  const otherIcon = weaponIcons[hud.otherWeaponId];
 
   const healthFrac = hud.maxHealth > 0 ? hud.health / hud.maxHealth : 0;
   const fuelFrac = hud.maxFuel > 0 ? hud.fuel / hud.maxFuel : 0;
@@ -41,7 +42,17 @@ export function Hud(): ReactElement {
         </div>
       </div>
 
-      <div className="weapon-panel">
+      <button
+        type="button"
+        className="weapon-panel"
+        aria-label={`${hud.weaponName}, ${String(hud.ammoMag)} of ${String(
+          hud.ammoReserve,
+        )} rounds. Switch to ${hud.otherWeaponName}`}
+        onPointerDown={(e) => {
+          e.preventDefault(); // keep keyboard focus on the game
+          appStore.requestWeaponSwitch();
+        }}
+      >
         {icon !== undefined && icon !== '' && (
           <img className="weapon-panel-icon" src={icon} alt="" draggable={false} />
         )}
@@ -58,11 +69,17 @@ export function Hud(): ReactElement {
             )}
           </div>
         </div>
-        <div className="weapon-panel-grenades" aria-label={`${String(hud.grenades)} grenades`}>
-          <span className="pip" aria-hidden="true" />
-          <span aria-hidden="true">×{hud.grenades}</span>
+        <div className="weapon-panel-grenades" aria-hidden="true">
+          <span className="pip" />
+          <span>×{hud.grenades}</span>
         </div>
-      </div>
+        <div className="weapon-panel-swap" aria-hidden="true">
+          <span className="swap-glyph">⇄</span>
+          {otherIcon !== undefined && otherIcon !== '' && (
+            <img className="weapon-panel-other" src={otherIcon} alt="" draggable={false} />
+          )}
+        </div>
+      </button>
 
       <div className="hud-corner hud-top-left">
         <div className="scorebox">

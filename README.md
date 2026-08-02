@@ -156,7 +156,7 @@ Offline capabilities, precisely:
 | `F` or right mouse button | Melee (Spanner Strike)                                                      |
 | `G`                       | Throw frag grenade                                                          |
 | `R`                       | Reload                                                                      |
-| `Q`                       | Switch weapon                                                               |
+| `Q`                       | Switch primary ↔ secondary (or tap the weapon panel, top centre)            |
 | `E`                       | Take the weapon off the pad you're standing on (or tap the circular button) |
 | `Z`                       | Toggle the weapon scope (or tap the reticle button, top right)              |
 | `Tab`                     | Scoreboard (planned, M4)                                                    |

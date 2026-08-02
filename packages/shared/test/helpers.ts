@@ -7,8 +7,11 @@ import {
   setInput,
   stepWorld,
   type ButtonMask,
+  weaponDef,
+  WEAPON_SLOTS,
   type MapDef,
   type SimWorld,
+  type WeaponId,
 } from '../src/index.js';
 
 /** A sealed 20×12 box room: flat floor, no obstacles. Predictable physics. */
@@ -60,6 +63,22 @@ export function addCombatant(world: SimWorld): number {
   const slot = addPlayer(world);
   world.players.protect[slot] = 0;
   return slot;
+}
+
+/**
+ * Equip a weapon into its own slot, fully loaded, and hold it. Weapons are
+ * slot-locked (ADR-017), so tests must not assume a given gun sits in a
+ * given slot — ask for it by id.
+ */
+export function equip(world: SimWorld, player: number, id: WeaponId): void {
+  const def = weaponDef(id);
+  const idx = player * WEAPON_SLOTS + def.slot;
+  world.players.weapons[idx] = id;
+  world.players.ammoMag[idx] = def.magSize;
+  world.players.ammoReserve[idx] = def.reserveMax;
+  world.players.weaponSlot[player] = def.slot;
+  world.players.cooldown[player] = 0;
+  world.players.reload[player] = 0;
 }
 
 /** Place a player at an exact position, zeroing velocity. */

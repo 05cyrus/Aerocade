@@ -275,6 +275,29 @@ The button's label shows the **current effective** zoom (`1×` unscoped, the wea
 scoped), not the weapon's potential. Showing the potential made the label look static across a
 toggle and implied you were already zoomed when you were not.
 
+## ADR-017: Weapons are slot-locked — primary and secondary
+
+The two inventory slots now mean something. Slot 0 holds a **primary** (SMG, rifle, shotgun,
+sniper, launcher); slot 1 holds a **secondary** — a sidearm. Each weapon declares its slot in
+`weapon-defs.ts`, and `weapons[player * WEAPON_SLOTS + def.slot]` is the only place it can live.
+
+- **A pickup replaces its own slot and nothing else.** Grabbing a rifle while holding your
+  pistol swaps the rifle in and leaves the pistol alone. The displaced gun drops with its exact
+  remaining ammo, as before (ADR-015). This makes a loadout something you build rather than a
+  single slot you keep overwriting.
+- **The pickup equips what you took.** The press was deliberate, so the active slot follows the
+  weapon in.
+- **Switching is a tap on the weapon panel** (or `Q`). The panel shows the other slot's gun
+  behind a `⇄`, so the tap target reads as "switch to that".
+- The spawn loadout is `[primary, secondary]` and a test asserts each entry belongs to the slot
+  it occupies, so a future roster edit cannot quietly seat a shotgun in the sidearm slot.
+
+**Known roster imbalance:** six of the seven weapons are primaries and the Rivet Pistol is the
+only secondary, so the sidearm slot is effectively fixed and a pad rolling a "secondary" always
+offers the same gun. The mechanism is right; the content is thin. Adding one or two more
+sidearms (a machine pistol, a hand cannon) is the natural follow-up and needs no code change
+beyond a definition.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

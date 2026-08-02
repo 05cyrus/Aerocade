@@ -22,8 +22,10 @@ export const SimEventType = {
   Trace: 10,
   /** A weapon pad refilled with a freshly rolled weapon. */
   PickupSpawn: 11,
-  /** A player collected a weapon pad. */
+  /** A player collected a ground item. */
   PickupTaken: 12,
+  /** Gear hit the ground from a weapon swap or a death. */
+  PickupDropped: 13,
 } as const;
 
 export type SimEventType = (typeof SimEventType)[keyof typeof SimEventType];
@@ -42,8 +44,10 @@ export type SimEventType = (typeof SimEventType)[keyof typeof SimEventType];
  * - GrenadeThrow:  a=player, x/y=throw origin
  * - Trace:         a=shooter, b=weaponId, x/y=pellet path endpoint
  * - PickupSpawn:   a=padIndex, b=weaponId, x/y=pad position
- * - PickupTaken:   a=player, b=weaponId, x/y=pad position, r=1 if it was an
- *                  ammo top-up (player already carried that weapon)
+ * - PickupTaken:   a=player, b=weaponId (-1 for grenades), x/y=item position,
+ *                  r=1 when it merged into what the player already carried
+ * - PickupDropped: a=player who dropped it, b=weaponId (-1 for grenades),
+ *                  x/y=drop origin
  */
 export interface SimEvent {
   type: SimEventType;

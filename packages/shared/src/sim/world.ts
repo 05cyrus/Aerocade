@@ -2,6 +2,7 @@ import {
   MAX_DAMAGE_REQUESTS,
   MAX_PICKUPS,
   MAX_PLAYERS,
+  MAX_WEAPON_PADS,
   MAX_PROJECTILES,
   NO_PLAYER,
   SIM_DT,
@@ -151,20 +152,89 @@ export class ProjectilePool {
   }
 }
 
+/** What a ground pickup contains. */
+export const PickupKind = {
+  Weapon: 0,
+  Grenades: 1,
+} as const;
+
+export type PickupKind = (typeof PickupKind)[keyof typeof PickupKind];
+
 /**
- * Weapon pads. Slot _i_ corresponds to `map.weaponPads[i]`, so positions are
- * static map data and only the contents are simulated: which weapon is on the
- * pad, whether it is collectable, and how long until it refills.
+ * Items lying on the ground: guns spawned by pads, plus gear dropped when a
+ * player swaps weapons or dies. Unlike pads these have real positions and
+ * fall under gravity, so the pool carries motion state.
+ *
+ * Ammo travels with the item — a dropped gun keeps exactly the rounds its
+ * owner had left (ADR-015).
  */
 export class PickupPool {
-  /** 1 while a weapon is sitting on the pad and can be collected. */
-  readonly active = new Uint8Array(MAX_PICKUPS);
-  /** WeaponId currently offered (meaningful only while active). */
+  readonly alive = new Uint8Array(MAX_PICKUPS);
+  /** `PickupKind`. */
+  readonly kind = new Uint8Array(MAX_PICKUPS);
+  /** WeaponId, for `kind === Weapon`. */
   readonly weapon = new Uint8Array(MAX_PICKUPS);
-  /** Seconds until the pad refills; 0 while active. */
-  readonly respawnIn = new Float32Array(MAX_PICKUPS);
+  /** Rounds in the magazine, or the grenade count for `kind === Grenades`. */
+  readonly mag = new Int16Array(MAX_PICKUPS);
+  /** Reserve rounds; unused for grenades. */
+  readonly reserve = new Int16Array(MAX_PICKUPS);
+  readonly posX = new Float64Array(MAX_PICKUPS);
+  readonly posY = new Float64Array(MAX_PICKUPS);
+  readonly velX = new Float64Array(MAX_PICKUPS);
+  readonly velY = new Float64Array(MAX_PICKUPS);
+  /** 1 once the item has settled on a surface. */
+  readonly grounded = new Uint8Array(MAX_PICKUPS);
+  /** Owning weapon pad, or -1 when this is a swap/death drop. */
+  readonly padIndex = new Int8Array(MAX_PICKUPS).fill(-1);
+  /** Seconds until a drop despawns; 0 means "never" (pad-spawned). */
+  readonly ttl = new Float32Array(MAX_PICKUPS);
+  /**
+   * Seconds before this item can be collected. Gear you just dropped must
+   * not fly straight back into your hands on the same tick you swapped.
+   */
+  readonly arm = new Float32Array(MAX_PICKUPS);
 
-  readonly all: readonly PoolArray[] = [this.active, this.weapon, this.respawnIn];
+  readonly all: readonly PoolArray[] = [
+    this.alive,
+    this.kind,
+    this.weapon,
+    this.mag,
+    this.reserve,
+    this.posX,
+    this.posY,
+    this.velX,
+    this.velY,
+    this.grounded,
+    this.padIndex,
+    this.ttl,
+    this.arm,
+  ];
+
+  findFree(): number {
+    for (let i = 0; i < MAX_PICKUPS; i++) {
+      if (this.alive[i] === 0) return i;
+    }
+    return -1;
+  }
+}
+
+/**
+ * Weapon pads are fixed spawners, not containers: each owns at most one live
+ * pickup and starts a refill timer when that pickup is taken. Slot _i_
+ * corresponds to `map.weaponPads[i]`, so positions stay static map data.
+ */
+export class WeaponPadPool {
+  /** Seconds until this pad spawns a new gun; 0 when it already has one. */
+  readonly timer = new Float32Array(MAX_WEAPON_PADS);
+  /** Pickup slot this pad currently owns, or -1. */
+  readonly pickup = new Int8Array(MAX_WEAPON_PADS).fill(-1);
+  /**
+   * Weapon this pad last offered, remembered after the pickup is gone so the
+   * "never the same gun twice running" rule survives the empty period.
+   */
+  readonly lastWeapon = new Int8Array(MAX_WEAPON_PADS).fill(-1);
+
+  readonly all: readonly PoolArray[] = [this.timer, this.pickup, this.lastWeapon];
 }
 
 /** One queued damage application; consumed by the damage system each tick. */
@@ -229,6 +299,7 @@ export interface SimWorld {
   readonly players: PlayerPool;
   readonly projectiles: ProjectilePool;
   readonly pickups: PickupPool;
+  readonly pads: WeaponPadPool;
   readonly damage: DamageQueue;
   readonly events: EventBuffer;
   /** Current-tick input per player slot; set via `setInput` before stepping. */
@@ -247,6 +318,7 @@ export function createWorld(map: MapDef, seed: number): SimWorld {
     players: new PlayerPool(),
     projectiles: new ProjectilePool(),
     pickups: new PickupPool(),
+    pads: new WeaponPadPool(),
     damage: new DamageQueue(),
     events: new EventBuffer(),
     inputs: Array.from({ length: MAX_PLAYERS }, () => emptyInput()),
@@ -276,6 +348,7 @@ export interface Snapshot {
   players: PlayerPool;
   projectiles: ProjectilePool;
   pickups: PickupPool;
+  pads: WeaponPadPool;
 }
 
 export function createSnapshot(): Snapshot {
@@ -285,6 +358,7 @@ export function createSnapshot(): Snapshot {
     players: new PlayerPool(),
     projectiles: new ProjectilePool(),
     pickups: new PickupPool(),
+    pads: new WeaponPadPool(),
   };
 }
 
@@ -294,6 +368,7 @@ export function takeSnapshot(world: SimWorld, out: Snapshot): Snapshot {
   copyArrays(world.players.all, out.players.all);
   copyArrays(world.projectiles.all, out.projectiles.all);
   copyArrays(world.pickups.all, out.pickups.all);
+  copyArrays(world.pads.all, out.pads.all);
   return out;
 }
 
@@ -303,6 +378,7 @@ export function restoreSnapshot(world: SimWorld, snap: Snapshot): void {
   copyArrays(snap.players.all, world.players.all);
   copyArrays(snap.projectiles.all, world.projectiles.all);
   copyArrays(snap.pickups.all, world.pickups.all);
+  copyArrays(snap.pads.all, world.pads.all);
 }
 
 /**
@@ -323,7 +399,7 @@ export function stateHash(world: SimWorld): number {
   mix((world.rng.state >>> 8) & 0xff);
   mix((world.rng.state >>> 16) & 0xff);
   mix((world.rng.state >>> 24) & 0xff);
-  const pools = [world.players.all, world.projectiles.all, world.pickups.all];
+  const pools = [world.players.all, world.projectiles.all, world.pickups.all, world.pads.all];
   for (const pool of pools) {
     for (const arr of pool) {
       const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);

@@ -26,8 +26,9 @@ export { damageSystem } from './sim/systems/damage.js';
 export {
   pickupsSystem,
   initPickups,
-  findPadUnderPlayer,
-  playerReachesPad,
+  findPickupUnderPlayer,
+  playerReachesPickup,
+  dropAllEquipment,
 } from './sim/systems/pickups.js';
 export { respawnSystem } from './sim/systems/respawn.js';
 export * from './sim/combat/weapon-defs.js';

@@ -9,7 +9,8 @@ import {
   addPlayer,
   createFoundryMap,
   createMatch,
-  findPadUnderPlayer,
+  findPickupUnderPlayer,
+  PickupKind,
   setInput,
   stepWorld,
   weaponDef,
@@ -181,6 +182,10 @@ export class GameSession implements SceneDriver {
       if (ev.type === SimEventType.Death) {
         appStore.pushKill(this.nameOf(ev.b), this.nameOf(ev.a));
       } else if (ev.type === SimEventType.PickupTaken && ev.a === this.localPlayer) {
+        if (ev.b < 0) {
+          appStore.showPickup('GRENADES');
+          return;
+        }
         const name = weaponDef(ev.b as WeaponId).name.toUpperCase();
         appStore.showPickup(ev.r === 1 ? `${name} AMMO` : `PICKED UP ${name}`);
       }
@@ -194,12 +199,18 @@ export class GameSession implements SceneDriver {
    * without costing a render per frame.
    */
   private publishPrompt(): void {
-    const padIndex = findPadUnderPlayer(this.world, this.localPlayer);
-    if (padIndex === -1) {
+    const slot = findPickupUnderPlayer(this.world, this.localPlayer);
+    if (slot === -1) {
       appStore.setPrompt(null);
       return;
     }
-    const weaponId = (this.world.pickups.weapon[padIndex] ?? 0) as WeaponId;
+    const pk = this.world.pickups;
+    if ((pk.kind[slot] as PickupKind) === PickupKind.Grenades) {
+      const count = pk.mag[slot] ?? 0;
+      appStore.setPrompt({ weaponId: -1, weaponName: `Grenades ×${String(count)}` });
+      return;
+    }
+    const weaponId = (pk.weapon[slot] ?? 0) as WeaponId;
     appStore.setPrompt({ weaponId, weaponName: weaponDef(weaponId).name });
   }
 

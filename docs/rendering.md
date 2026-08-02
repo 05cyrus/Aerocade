@@ -100,11 +100,11 @@ sim, touching only entities whose `alive` flag is set.
 Sim pools are fixed-capacity (players ×8, projectiles ×256, pickups ×64). The renderer
 allocates matching sprite pools **once** in `ArenaScene.create` and never afterwards:
 
-| Sim pool         | Render pool                                    | Sync rule                                                |
-| ---------------- | ---------------------------------------------- | -------------------------------------------------------- |
-| players ×8       | 8 articulated rigs (7 sprites each, see below) | index _i_ sim ↔ index _i_ rig                            |
-| projectiles ×256 | 256 sprites                                    | atlas frame swapped by projectile kind on activation     |
-| pickups ×64      | 1 floor disc + 1 gun sprite per map weapon pad | pad positions are static map data; only contents animate |
+| Sim pool         | Render pool                                      | Sync rule                                                 |
+| ---------------- | ------------------------------------------------ | --------------------------------------------------------- |
+| players ×8       | 8 articulated rigs (7 sprites each, see below)   | index _i_ sim ↔ index _i_ rig                             |
+| projectiles ×256 | 256 sprites                                      | atlas frame swapped by projectile kind on activation      |
+| pickups ×64      | 64 item sprites (+ 1 static disc per weapon pad) | index _i_ sim ↔ index _i_ sprite; discs are map furniture |
 
 Sync per frame: if `alive[i]` and sprite hidden → activate (`setVisible(true)`, assign
 texture); if dead and visible → deactivate. Active sprites get position/rotation/flip written
@@ -138,8 +138,10 @@ tumble of armor pieces. Reload and low-fuel states are HUD concerns, not sprite 
 
 ### Overhead health bars
 
-Every player except the local one carries a bar above their head, read straight from
-`players.health` each frame so it tracks damage the tick it lands. It is two sprites — a slate
+**Every living player** carries a bar above their head, the local player included, read straight
+from `players.health` each frame so it tracks damage the tick it lands. The bar is cleared in the
+same frame a player dies — the render loop skips invisible players, so hiding has to happen on
+that branch or the last drawn sliver of health freezes over the corpse. It is two sprites — a slate
 backing and a tinted fill whose `scaleX` is the health fraction, origin pinned left so it drains
 rightward. Fill color runs green → amber → red.
 
@@ -153,8 +155,9 @@ reads as a floating chip rather than a bar that is nearly empty.
 ### Weapon pads
 
 Pads are drawn state-driven, never event-driven, so they are correct on the first frame after a
-snapshot or a reconciliation rewind. A stocked pad shows its gun — the real atlas frame for
-whatever weapon it currently holds — bobbing over a bright floor disc. A looted pad keeps the
+snapshot or a reconciliation rewind. Pad discs are static furniture, one per map pad. Ground items — pad guns _and_ dropped gear —
+are separate pooled sprites indexed by pickup slot, since drops are thrown and fall. A pad's gun
+bobs; dropped gear lies where it landed and fades over its final seconds. A looted pad keeps the
 disc but dims it, then **brightens it as the refill approaches**: readiness is
 `1 − respawnIn / weaponRespawnDelay`, so a player across the arena can read "that pad is about
 to restock" and time a return. Collection and refill each emit a short particle puff.

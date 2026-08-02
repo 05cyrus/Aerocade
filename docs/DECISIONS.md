@@ -216,6 +216,32 @@ two tinted sprites from the shared atlas rather than a per-player `Graphics`, wh
 the batch every frame (ADR-012); and they live outside the rig container, because the rig
 mirrors on facing and a bar inside it would drain right-to-left.
 
+## ADR-015: Guns are objects on the ground, not slots on a pad
+
+Weapons used to exist only as pad contents. Two requests broke that model: a swap should
+**drop** the gun you were holding, and a death should **scatter everything** the victim
+carried. Both need items with real positions and their own ammo, so the pickup pool became a
+pool of ground objects and pads became pure spawners.
+
+- **Pads spawn, they do not contain.** `WeaponPadPool` holds a refill timer and the slot of the
+  pickup it currently owns. A pad remembers the last gun it offered so the no-repeat rule
+  survives the empty period.
+- **Ammo travels with the item.** A dropped gun keeps the exact magazine and reserve its owner
+  had; picking it back up restores precisely that. Grenades drop as a bundle carrying the count.
+- **Drops fall.** They are thrown clear with a fixed (not random) scatter — deterministic
+  without consuming RNG draws that reconciliation would have to replay — then fall and settle.
+- **Drops expire** after `dropTtl`; pad guns never do. When the pool saturates, the
+  shortest-lived _drop_ is recycled and pad guns are never evicted, so the arena's fixed supply
+  survives a messy firefight.
+- **Two rules found by tests, both real bugs:**
+  1. Dropped gear gets an `arm` delay. Without it the gun you dropped while swapping landed in
+     a later pool slot and was re-collected on the _same tick_ — you never lost it.
+  2. A player collects **at most one item per tick**. Collecting can itself drop gear, and
+     nobody should sweep a pile with one press.
+
+Health and ammo pads remain the natural next kinds: another `PickupKind` and a branch in
+`collect`, not a new architecture.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

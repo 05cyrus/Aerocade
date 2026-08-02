@@ -115,7 +115,16 @@ export const appStore = {
   setPrompt(prompt: PickupPrompt | null): void {
     const current = state.prompt;
     if (current === prompt) return;
-    if (current !== null && prompt !== null && current.weaponId === prompt.weaponId) return;
+    // Compare the label too: grenade bundles all share weaponId -1 but differ
+    // by count, and the button must show the right number.
+    if (
+      current !== null &&
+      prompt !== null &&
+      current.weaponId === prompt.weaponId &&
+      current.weaponName === prompt.weaponName
+    ) {
+      return;
+    }
     state = { ...state, prompt };
     notify();
   },

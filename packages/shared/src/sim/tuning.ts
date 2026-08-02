@@ -32,6 +32,8 @@ export const TUNING = {
     spawnProtection: 2.5,
     /** Grenades carried at spawn. */
     spawnGrenades: 3,
+    /** Hard cap on carried grenades, so looting corpses cannot stockpile. */
+    maxGrenades: 5,
     /**
      * Absolute speed ceiling after knockback stacking. Keeps per-tick
      * displacement well under one tile so swept collision can never tunnel.
@@ -102,8 +104,26 @@ export const TUNING = {
      * contesting, short enough that a match never runs dry.
      */
     weaponRespawnDelay: 12,
-    /** Half-extent of a pad's collection box, meters. */
+    /** Half-extent of a pickup's collection box, meters. */
     halfSize: 0.55,
+    /**
+     * Seconds a *dropped* item survives before fading out. Pad-spawned guns
+     * never expire; drops do, or a long match silts up with dead players'
+     * leftovers.
+     */
+    dropTtl: 30,
+    /** Half-height used to rest a dropped item on the floor, meters. */
+    dropRestHalfHeight: 0.3,
+    /** Launch speeds when gear is thrown clear of a swap or a corpse. */
+    dropUpSpeed: 3.4,
+    dropSideSpeed: 2.1,
+    /** Horizontal damping while a drop is still in the air, per second. */
+    dropAirDrag: 1.4,
+    /**
+     * Grace period before a dropped item can be collected. Without it, the
+     * gun you drop while swapping is back in your hands the same tick.
+     */
+    dropArmDelay: 0.6,
   },
   match: {
     /** Default match length (used from M4; the sandbox ignores it). */

@@ -1,5 +1,6 @@
 import { NO_PLAYER } from '../../constants.js';
 import { SimEventType } from '../events.js';
+import { dropAllEquipment } from './pickups.js';
 import { TUNING } from '../tuning.js';
 import type { SimWorld } from '../world.js';
 
@@ -37,6 +38,9 @@ export function damageSystem(world: SimWorld): void {
 
 function kill(world: SimWorld, victim: number, directSource: number): void {
   const p = world.players;
+  // Scatter their gear before the slot is reset — a kill should leave loot
+  // on the ground carrying exactly the ammo the victim had left (ADR-015).
+  dropAllEquipment(world, victim);
   p.status[victim] = 0;
   p.health[victim] = 0;
   p.respawn[victim] = TUNING.player.respawnDelay;

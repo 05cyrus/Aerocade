@@ -15,8 +15,11 @@ export const MAX_PLAYERS = 8;
 /** Pool capacity for live projectiles (rockets, shells, grenades). */
 export const MAX_PROJECTILES = 256;
 
-/** Pool capacity for map pickups (health, ammo, weapons). */
+/** Pool capacity for items lying on the ground (pad guns plus drops). */
 export const MAX_PICKUPS = 64;
+
+/** Maximum weapon-pad spawners a map may declare. */
+export const MAX_WEAPON_PADS = 32;
 
 /** Pool capacity for per-tick simulation events (effects, kills, sounds). */
 export const MAX_EVENTS = 128;

@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import {
   Buttons,
+  MAX_PICKUPS,
   MAX_PLAYERS,
   MAX_PROJECTILES,
+  PickupKind,
   ProjectileKind,
   SimEventType,
   TUNING,
@@ -32,6 +34,8 @@ const MAX_TRACERS = 32;
 const MAX_RINGS = 8;
 /** Pad disc sits just below the tile center so it reads as lying on the floor. */
 const PAD_DISC_OFFSET_PX = 15;
+/** Dropped gear fades over its last seconds so vanishing is not a pop. */
+const PICKUP_FADE_SECONDS = 3;
 /** Hover animation for a stocked pad's gun. */
 const PAD_BOB_PX = 3.5;
 const PAD_BOB_SPEED = 0.0028;
@@ -80,8 +84,9 @@ export class ArenaScene extends Phaser.Scene {
 
   private rigs: PlayerRig[] = [];
   private projectileSprites = new Map<number, Phaser.GameObjects.Sprite>();
-  /** One pad disc + one floating gun per map weapon pad, allocated once. */
+  /** One disc per map weapon pad (static furniture). */
   private padDiscs: Phaser.GameObjects.Sprite[] = [];
+  /** One sprite per pickup slot — pad guns and dropped gear alike. */
   private padGuns: Phaser.GameObjects.Sprite[] = [];
   /** Overhead health bar per player: dark backing plus a tinted fill. */
   private healthBacks: Phaser.GameObjects.Sprite[] = [];
@@ -140,17 +145,24 @@ export class ArenaScene extends Phaser.Scene {
    * it. Both are pooled by pad index — no churn when pads are looted.
    */
   private buildPickups(): void {
+    // Pad discs are static map furniture — one per pad, positioned once.
     for (const pad of this.world.map.weaponPads) {
-      const x = pad.x * PX_PER_M;
-      const y = pad.y * PX_PER_M;
       this.padDiscs.push(
         this.add
-          .sprite(x, y + PAD_DISC_OFFSET_PX, ATLAS, Frames.Pad)
+          .sprite(pad.x * PX_PER_M, pad.y * PX_PER_M + PAD_DISC_OFFSET_PX, ATLAS, Frames.Pad)
           .setScale(RIG_SCALE)
           .setDepth(1),
       );
+    }
+    // Ground items move (they are thrown and fall), so they get their own
+    // pooled sprites indexed by pickup slot.
+    for (let i = 0; i < MAX_PICKUPS; i++) {
       this.padGuns.push(
-        this.add.sprite(x, y, ATLAS, Frames.Rocket).setScale(RIG_SCALE).setDepth(2),
+        this.add
+          .sprite(0, 0, ATLAS, Frames.Rocket)
+          .setScale(RIG_SCALE)
+          .setDepth(2)
+          .setVisible(false),
       );
     }
   }
@@ -273,6 +285,9 @@ export class ArenaScene extends Phaser.Scene {
       if (rig === undefined) continue;
       if (interp.playerVisible[i] !== 1) {
         rig.setVisible(false);
+        // Clear the bar in the same frame the player dies. Skipping this left
+        // the last drawn sliver of health frozen over the corpse.
+        this.hideHealthBar(i);
         continue;
       }
       const x = interp.playerX(i, alpha) * PX_PER_M;
@@ -295,21 +310,21 @@ export class ArenaScene extends Phaser.Scene {
     this.moveCamera(interp, alpha);
   }
 
+  private hideHealthBar(player: number): void {
+    this.healthBacks[player]?.setVisible(false);
+    this.healthFills[player]?.setVisible(false);
+  }
+
   /**
-   * Floating health bar over another player's head, read straight from sim
-   * health so it tracks damage the moment it lands. The local player is
-   * skipped — their own health is the HUD's job, and a bar on your own head
-   * just blocks your view.
+   * Floating health bar over a player's head, read straight from sim health
+   * so it tracks damage the moment it lands. Every living player carries one,
+   * including you — the HUD bar answers "how am I doing", the overhead bar
+   * answers it without looking away from the fight.
    */
   private renderHealthBar(player: number, x: number, y: number): void {
     const back = this.healthBacks[player];
     const fill = this.healthFills[player];
     if (back === undefined || fill === undefined) return;
-    if (player === this.localPlayer) {
-      back.setVisible(false);
-      fill.setVisible(false);
-      return;
-    }
 
     const p = this.world.players;
     const frac = Phaser.Math.Clamp((p.health[player] ?? 0) / TUNING.player.maxHealth, 0, 1);
@@ -329,33 +344,47 @@ export class ArenaScene extends Phaser.Scene {
    * players still know where to come back to.
    */
   private renderPickups(): void {
-    const pads = this.world.map.weaponPads;
-    const pk = this.world.pickups;
+    const world = this.world;
+    const pk = world.pickups;
     const bob = Math.sin(this.time.now * PAD_BOB_SPEED) * PAD_BOB_PX;
 
-    for (let i = 0; i < pads.length; i++) {
-      const pad = pads[i];
+    // Pad discs: bright while stocked, dim while empty, brightening as the
+    // refill nears so players can read an incoming restock from across the map.
+    for (let i = 0; i < this.padDiscs.length; i++) {
       const disc = this.padDiscs[i];
-      const gun = this.padGuns[i];
-      if (pad === undefined || disc === undefined || gun === undefined) continue;
-
-      const stocked = pk.active[i] === 1;
-      gun.setVisible(stocked);
-      if (!stocked) {
-        // An empty pad stays visible but dim, and brightens as its refill
-        // approaches — players can read "this is about to restock" from
-        // across the arena and time a return.
-        const left = pk.respawnIn[i] ?? 0;
+      if (disc === undefined) continue;
+      const owned = world.pads.pickup[i] ?? -1;
+      if (owned >= 0 && pk.alive[owned] === 1) {
+        disc.setAlpha(0.95);
+      } else {
+        const left = world.pads.timer[i] ?? 0;
         const readiness = 1 - Math.min(1, left / TUNING.pickups.weaponRespawnDelay);
         disc.setAlpha(0.18 + 0.34 * readiness);
+      }
+    }
+
+    // Ground items: pad guns hover, dropped gear lies where it landed and
+    // fades out as its lifetime runs down.
+    for (let i = 0; i < MAX_PICKUPS; i++) {
+      const sprite = this.padGuns[i];
+      if (sprite === undefined) continue;
+      if (pk.alive[i] !== 1) {
+        sprite.setVisible(false);
         continue;
       }
+      const isGrenades = (pk.kind[i] as PickupKind) === PickupKind.Grenades;
+      const frame = isGrenades ? Frames.Grenade : weaponFrame((pk.weapon[i] ?? 0) as WeaponId);
+      if (sprite.frame.name !== frame) sprite.setFrame(frame);
 
-      disc.setAlpha(0.95);
-
-      const frame = weaponFrame((pk.weapon[i] ?? 0) as WeaponId);
-      if (gun.frame.name !== frame) gun.setFrame(frame);
-      gun.setY(pad.y * PX_PER_M + bob);
+      const fromPad = (pk.padIndex[i] ?? -1) >= 0;
+      const ttl = pk.ttl[i] ?? 0;
+      sprite
+        .setPosition(
+          (pk.posX[i] ?? 0) * PX_PER_M,
+          (pk.posY[i] ?? 0) * PX_PER_M + (fromPad ? bob : 0),
+        )
+        .setAlpha(!fromPad && ttl > 0 && ttl < PICKUP_FADE_SECONDS ? ttl / PICKUP_FADE_SECONDS : 1)
+        .setVisible(true);
     }
   }
 

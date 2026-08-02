@@ -23,8 +23,8 @@ export function MainMenu(): ReactElement {
       <div className="hint">
         <kbd>A</kbd>/<kbd>D</kbd> move · <kbd>Space</kbd> jump &amp; jetpack · <kbd>S</kbd> +{' '}
         <kbd>Space</kbd> hover · mouse aim · <kbd>LMB</kbd> fire · <kbd>RMB</kbd> melee ·{' '}
-        <kbd>G</kbd> grenade · <kbd>R</kbd> reload · <kbd>Q</kbd> swap weapon · <kbd>Shift</kbd>{' '}
-        walk
+        <kbd>G</kbd> grenade · <kbd>R</kbd> reload · <kbd>Q</kbd> swap weapon · <kbd>E</kbd> take
+        weapon from pad · <kbd>Shift</kbd> walk
       </div>
     </div>
   );

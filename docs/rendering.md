@@ -136,6 +136,20 @@ container per player on the display list.
 Spawn protection (2.5 s) renders as an alpha pulse on the whole rig; death spawns a short
 tumble of armor pieces. Reload and low-fuel states are HUD concerns, not sprite concerns.
 
+### Overhead health bars
+
+Every player except the local one carries a bar above their head, read straight from
+`players.health` each frame so it tracks damage the tick it lands. It is two sprites — a slate
+backing and a tinted fill whose `scaleX` is the health fraction, origin pinned left so it drains
+rightward. Fill color runs green → amber → red.
+
+Two constraints shaped this. The bars are **atlas sprites, not `Graphics`**: a per-player
+`Graphics` rebuilds geometry and flushes the batch every frame (ADR-012). And they sit
+**outside the rig container**, because the rig mirrors with `scaleX = -1` on facing, which would
+make a nested bar drain the wrong way. The backing is deliberately mid-slate rather than
+near-black — against a dark arena a black backing is invisible, and a nearly-empty bar then
+reads as a floating chip rather than a bar that is nearly empty.
+
 ### Weapon pads
 
 Pads are drawn state-driven, never event-driven, so they are correct on the first frame after a

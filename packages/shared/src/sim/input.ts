@@ -14,9 +14,20 @@ export const Buttons = {
   Reload: 1 << 5,
   SwitchWeapon: 1 << 6,
   Walk: 1 << 7,
+  /**
+   * Context action — currently "take the weapon on the pad I'm standing on".
+   * Edge-triggered by the sim, so holding it never grabs the next respawn.
+   */
+  Interact: 1 << 8,
 } as const;
 
 export type ButtonMask = number;
+
+/**
+ * Every defined button bit. Derived rather than hard-coded so adding a button
+ * cannot silently leave it stripped by `sanitizeInput`.
+ */
+export const ALL_BUTTONS: ButtonMask = Object.values(Buttons).reduce((mask, bit) => mask | bit, 0);
 
 export interface InputCommand {
   /** Client-side monotonically increasing sequence number (netcode acking). */
@@ -48,6 +59,6 @@ export function sanitizeInput(cmd: InputCommand): InputCommand {
   cmd.moveX = Number.isFinite(cmd.moveX) ? Math.max(-1, Math.min(1, cmd.moveX)) : 0;
   cmd.moveY = Number.isFinite(cmd.moveY) ? Math.max(-1, Math.min(1, cmd.moveY)) : 0;
   cmd.aim = Number.isFinite(cmd.aim) ? cmd.aim : 0;
-  cmd.buttons = (cmd.buttons >>> 0) & 0xff;
+  cmd.buttons = (cmd.buttons >>> 0) & ALL_BUTTONS;
   return cmd;
 }

@@ -12,7 +12,7 @@ import {
   type SimWorld,
   type WeaponId,
 } from '../src/index.js';
-import { addCombatant, run, stage, teleport } from './helpers.js';
+import { addCombatant, Buttons, run, stage, teleport } from './helpers.js';
 
 /** A flat room with one weapon pad on the floor at tile (5, 3). */
 function padRoom(): SimWorld {
@@ -32,6 +32,17 @@ function countEvents(world: SimWorld, type: number): number {
     if (ev.type === type) n += 1;
   });
   return n;
+}
+
+/**
+ * Stand a player on a pad and tap interact — the sequence a real player
+ * performs. Pickup is opt-in (ADR-014), so the press is what collects.
+ */
+function takePad(world: SimWorld, player: number, pad: { x: number; y: number }): void {
+  teleport(world, player, pad.x, pad.y);
+  stage(world, player, { buttons: Buttons.Interact });
+  run(world, 1);
+  stage(world, player, {}); // release, so the next tick is a fresh edge
 }
 
 describe('weapon pad placement', () => {
@@ -79,8 +90,7 @@ describe('pad stocking and respawn', () => {
     const pad = world.map.weaponPads[0];
     if (pad === undefined) throw new Error('no pad');
 
-    teleport(world, p, pad.x, pad.y);
-    run(world, 1);
+    takePad(world, p, pad);
     expect(world.pickups.active[0]).toBe(0);
     expect(world.pickups.respawnIn[0]).toBeCloseTo(TUNING.pickups.weaponRespawnDelay, 3);
 
@@ -103,8 +113,7 @@ describe('pad stocking and respawn', () => {
     const seen = new Set<number>();
     for (let cycle = 0; cycle < 12; cycle++) {
       seen.add(world.pickups.weapon[0] ?? -1);
-      teleport(world, p, pad.x, pad.y); // loot it
-      run(world, 1);
+      takePad(world, p, pad);
       // Fast-forward the refill timer: the delay itself is covered above, so
       // this test spends its ticks on the roll, not on waiting. Use a
       // sub-tick value — respawnIn is Float32, and storing exactly SIM_DT
@@ -123,13 +132,74 @@ describe('pad stocking and respawn', () => {
     if (pad === undefined) throw new Error('no pad');
     for (let cycle = 0; cycle < 20; cycle++) {
       const before = world.pickups.weapon[0] ?? -1;
-      teleport(world, p, pad.x, pad.y);
-      run(world, 1);
+      takePad(world, p, pad);
       teleport(world, p, 2, pad.y);
       world.pickups.respawnIn[0] = SIM_DT / 2; // sub-tick fast-forward, as above
       run(world, 1);
       expect(world.pickups.weapon[0]).not.toBe(before);
     }
+  });
+});
+
+describe('pickup is opt-in', () => {
+  it('standing on a pad without pressing interact takes nothing', () => {
+    const world = padRoom();
+    const p = addCombatant(world);
+    const pad = world.map.weaponPads[0];
+    if (pad === undefined) throw new Error('no pad');
+    const carried = world.players.weapons[p * WEAPON_SLOTS];
+
+    teleport(world, p, pad.x, pad.y);
+    stage(world, p, {}); // loiter on the pad, no interact
+    run(world, 120); // two full seconds
+    expect(world.pickups.active[0]).toBe(1);
+    expect(world.players.weapons[p * WEAPON_SLOTS]).toBe(carried);
+    expect(countEvents(world, SimEventType.PickupTaken)).toBe(0);
+  });
+
+  it('pressing interact off a pad does nothing', () => {
+    const world = padRoom();
+    const p = addCombatant(world);
+    const pad = world.map.weaponPads[0];
+    if (pad === undefined) throw new Error('no pad');
+    teleport(world, p, pad.x + 3, pad.y);
+    stage(world, p, { buttons: Buttons.Interact });
+    run(world, 5);
+    expect(world.pickups.active[0]).toBe(1);
+  });
+
+  it('holding interact does not vacuum up the pad when it respawns', () => {
+    const world = padRoom();
+    const p = addCombatant(world);
+    const pad = world.map.weaponPads[0];
+    if (pad === undefined) throw new Error('no pad');
+
+    takePad(world, p, pad);
+    expect(world.pickups.active[0]).toBe(0);
+
+    // Camp the empty pad with the button held down through the refill.
+    teleport(world, p, pad.x, pad.y);
+    stage(world, p, { buttons: Buttons.Interact });
+    run(world, Math.ceil(TUNING.pickups.weaponRespawnDelay / SIM_DT) + 30);
+
+    // It respawned and stayed put: a held button is not a fresh press.
+    expect(world.pickups.active[0]).toBe(1);
+  });
+
+  it('a second tap after a refill does collect', () => {
+    const world = padRoom();
+    const p = addCombatant(world);
+    const pad = world.map.weaponPads[0];
+    if (pad === undefined) throw new Error('no pad');
+
+    takePad(world, p, pad);
+    world.pickups.respawnIn[0] = SIM_DT / 2; // fast-forward the refill
+    teleport(world, p, pad.x, pad.y);
+    run(world, 1);
+    expect(world.pickups.active[0]).toBe(1);
+
+    takePad(world, p, pad);
+    expect(world.pickups.active[0]).toBe(0);
   });
 });
 
@@ -147,8 +217,7 @@ describe('collecting a pad', () => {
     world.players.weapons[p * WEAPON_SLOTS + 1] = (offered + 2) % WEAPON_COUNT;
     world.players.weaponSlot[p] = 0;
 
-    teleport(world, p, pad.x, pad.y);
-    run(world, 1);
+    takePad(world, p, pad);
 
     expect(world.players.weapons[p * WEAPON_SLOTS]).toBe(offered);
     expect(world.players.ammoMag[p * WEAPON_SLOTS]).toBe(def.magSize);
@@ -167,8 +236,7 @@ describe('collecting a pad', () => {
     world.players.weaponSlot[p] = 0;
     const keep = world.players.weapons[p * WEAPON_SLOTS + 1];
 
-    teleport(world, p, pad.x, pad.y);
-    run(world, 1);
+    takePad(world, p, pad);
     expect(world.players.weapons[p * WEAPON_SLOTS + 1]).toBe(keep);
   });
 
@@ -186,6 +254,7 @@ describe('collecting a pad', () => {
     const activeBefore = world.players.weapons[p * WEAPON_SLOTS];
 
     teleport(world, p, pad.x, pad.y);
+    stage(world, p, { buttons: Buttons.Interact });
     run(world, 1);
 
     expect(world.players.ammoReserve[p * WEAPON_SLOTS + 1]).toBe(def.reserveMax);
@@ -206,6 +275,8 @@ describe('collecting a pad', () => {
 
     teleport(world, a, pad.x, pad.y);
     teleport(world, b, pad.x, pad.y);
+    stage(world, a, { buttons: Buttons.Interact });
+    stage(world, b, { buttons: Buttons.Interact });
     run(world, 1);
     expect(countEvents(world, SimEventType.PickupTaken)).toBe(1);
     expect(world.pickups.active[0]).toBe(0);
@@ -218,6 +289,7 @@ describe('collecting a pad', () => {
     if (pad === undefined) throw new Error('no pad');
     teleport(world, p, pad.x, pad.y);
     world.players.status[p] = 0;
+    stage(world, p, { buttons: Buttons.Interact });
     run(world, 1);
     expect(world.pickups.active[0]).toBe(1);
   });
@@ -228,7 +300,7 @@ describe('collecting a pad', () => {
     const pad = world.map.weaponPads[0];
     if (pad === undefined) throw new Error('no pad');
     teleport(world, p, pad.x + 3, pad.y);
-    stage(world, p, {});
+    stage(world, p, { buttons: Buttons.Interact });
     run(world, 1);
     expect(world.pickups.active[0]).toBe(1);
   });

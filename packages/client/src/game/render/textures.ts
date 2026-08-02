@@ -56,6 +56,12 @@ export const Frames = {
   Muzzle: 'muzzle',
   /** Glowing floor disc marking a weapon pad. */
   Pad: 'pad',
+  /**
+   * Plain white rounded rect, drawn twice per overhead health bar (dark
+   * backing + tinted fill). A tintable sprite keeps bars inside the atlas
+   * batch; a per-player `Graphics` would flush it every frame.
+   */
+  Bar: 'bar',
 } as const;
 
 /** Atlas frame name for a weapon's held silhouette. */
@@ -125,6 +131,7 @@ function collectParts(): Part[] {
     { name: Frames.Rocket, w: 16, h: 6, draw: drawRocket },
     { name: Frames.Grenade, w: 10, h: 10, draw: drawGrenade },
     { name: Frames.Pad, w: 48, h: 20, draw: drawPad },
+    { name: Frames.Bar, w: 64, h: 10, draw: drawBar },
     {
       name: Frames.Spark,
       w: 16,
@@ -338,6 +345,12 @@ function drawPad(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
   g.fillEllipse(ox + 24, oy + 12, 26, 9);
   g.fillStyle(0xdff4ff, 0.75);
   g.fillEllipse(ox + 24, oy + 12, 14, 5);
+}
+
+/** Flat white capsule; tinted at draw time for health-bar backing and fill. */
+function drawBar(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  g.fillStyle(0xffffff, 1);
+  g.fillRoundedRect(ox, oy, 64, 10, 5);
 }
 
 /** Cheap radial falloff: concentric circles at decreasing alpha. */

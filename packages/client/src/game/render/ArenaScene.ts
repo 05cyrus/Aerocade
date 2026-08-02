@@ -35,6 +35,16 @@ const PAD_DISC_OFFSET_PX = 15;
 /** Hover animation for a stocked pad's gun. */
 const PAD_BOB_PX = 3.5;
 const PAD_BOB_SPEED = 0.0028;
+/** Overhead health bars: 64×10 atlas frame scaled down, floated above the head. */
+const HEALTH_BAR_SCALE = 0.5;
+const HEALTH_BAR_WIDTH_PX = 64 * HEALTH_BAR_SCALE;
+const HEALTH_BAR_Y_OFFSET_PX = -34;
+/** Empty-portion color; must contrast with the arena, not blend into it. */
+const HEALTH_BAR_BACK_COLOR = 0x39456b;
+/** Fill colors interpolated by remaining health: green → amber → red. */
+const HEALTH_COLOR_FULL = 0x55e08c;
+const HEALTH_COLOR_MID = 0xf5e663;
+const HEALTH_COLOR_LOW = 0xff4d5e;
 
 interface Tracer {
   x1: number;
@@ -73,6 +83,9 @@ export class ArenaScene extends Phaser.Scene {
   /** One pad disc + one floating gun per map weapon pad, allocated once. */
   private padDiscs: Phaser.GameObjects.Sprite[] = [];
   private padGuns: Phaser.GameObjects.Sprite[] = [];
+  /** Overhead health bar per player: dark backing plus a tinted fill. */
+  private healthBacks: Phaser.GameObjects.Sprite[] = [];
+  private healthFills: Phaser.GameObjects.Sprite[] = [];
   private cameraTarget!: Phaser.GameObjects.Rectangle;
   private overlay!: Phaser.GameObjects.Graphics;
   private explosionEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -145,6 +158,29 @@ export class ArenaScene extends Phaser.Scene {
   private buildPlayers(): void {
     for (let i = 0; i < MAX_PLAYERS; i++) {
       this.rigs.push(new PlayerRig(this, PLAYER_COLORS[i % PLAYER_COLORS.length] ?? 0xffffff));
+
+      // Health bars live outside the rig container: the rig mirrors on facing
+      // (scaleX = -1) and a bar inside it would drain right-to-left.
+      this.healthBacks.push(
+        this.add
+          .sprite(0, 0, ATLAS, Frames.Bar)
+          .setScale(HEALTH_BAR_SCALE)
+          // Mid-slate, not near-black: the backing has to read against a dark
+          // arena or a nearly-empty bar looks like a floating chip instead of
+          // a bar that is nearly empty.
+          .setTint(HEALTH_BAR_BACK_COLOR)
+          .setAlpha(0.9)
+          .setDepth(7)
+          .setVisible(false),
+      );
+      this.healthFills.push(
+        this.add
+          .sprite(0, 0, ATLAS, Frames.Bar)
+          .setScale(HEALTH_BAR_SCALE)
+          .setOrigin(0, 0.5) // grows from the left edge
+          .setDepth(8)
+          .setVisible(false),
+      );
     }
   }
 
@@ -249,12 +285,42 @@ export class ArenaScene extends Phaser.Scene {
 
       // Spawn protection shimmer.
       rig.setAlpha((p.protect[i] ?? 0) > 0 ? 0.55 + 0.3 * Math.sin(this.time.now / 60) : 1);
+
+      this.renderHealthBar(i, x, y);
     }
 
     this.renderPickups();
     this.renderProjectiles(interp, alpha);
     this.renderOverlay(deltaMs);
     this.moveCamera(interp, alpha);
+  }
+
+  /**
+   * Floating health bar over another player's head, read straight from sim
+   * health so it tracks damage the moment it lands. The local player is
+   * skipped — their own health is the HUD's job, and a bar on your own head
+   * just blocks your view.
+   */
+  private renderHealthBar(player: number, x: number, y: number): void {
+    const back = this.healthBacks[player];
+    const fill = this.healthFills[player];
+    if (back === undefined || fill === undefined) return;
+    if (player === this.localPlayer) {
+      back.setVisible(false);
+      fill.setVisible(false);
+      return;
+    }
+
+    const p = this.world.players;
+    const frac = Phaser.Math.Clamp((p.health[player] ?? 0) / TUNING.player.maxHealth, 0, 1);
+    const barY = y + HEALTH_BAR_Y_OFFSET_PX;
+
+    back.setPosition(x, barY).setVisible(true);
+    fill
+      .setPosition(x - HEALTH_BAR_WIDTH_PX / 2, barY)
+      .setScale(HEALTH_BAR_SCALE * frac, HEALTH_BAR_SCALE)
+      .setTint(healthTint(frac))
+      .setVisible(frac > 0);
   }
 
   /**
@@ -486,4 +552,24 @@ export class ArenaScene extends Phaser.Scene {
       this.cameras.main.shake(140, 0.004 * strength);
     }
   }
+}
+
+/**
+ * Health-bar fill color: green above half, fading through amber to red as it
+ * empties, so a wounded opponent reads at a glance without needing numbers.
+ */
+function healthTint(frac: number): number {
+  return frac > 0.5
+    ? Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(HEALTH_COLOR_MID),
+        Phaser.Display.Color.ValueToColor(HEALTH_COLOR_FULL),
+        100,
+        Math.round((frac - 0.5) * 200),
+      ).color
+    : Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(HEALTH_COLOR_LOW),
+        Phaser.Display.Color.ValueToColor(HEALTH_COLOR_MID),
+        100,
+        Math.round(frac * 200),
+      ).color;
 }

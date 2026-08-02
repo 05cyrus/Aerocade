@@ -1,10 +1,11 @@
 import type { ReactElement } from 'react';
-import { useAppState } from '../store.js';
+import { appStore, useAppState } from '../store.js';
 
 export function Hud(): ReactElement {
   const hud = useAppState((s) => s.hud);
   const killFeed = useAppState((s) => s.killFeed);
   const pickup = useAppState((s) => s.pickup);
+  const prompt = useAppState((s) => s.prompt);
 
   const healthFrac = hud.maxHealth > 0 ? hud.health / hud.maxHealth : 0;
   const fuelFrac = hud.maxFuel > 0 ? hud.fuel / hud.maxFuel : 0;
@@ -58,6 +59,22 @@ export function Hud(): ReactElement {
           ))}
         </div>
       </div>
+
+      {prompt !== null && (
+        <button
+          type="button"
+          className="pickup-button"
+          aria-label={`Pick up ${prompt.weaponName}`}
+          onPointerDown={(e) => {
+            e.preventDefault(); // keep focus off the button so keys keep working
+            appStore.requestInteract();
+          }}
+        >
+          <span className="pickup-button-glyph" aria-hidden="true" />
+          <span className="pickup-button-label">{prompt.weaponName}</span>
+          <span className="pickup-button-key">E</span>
+        </button>
+      )}
 
       {pickup !== null && (
         <div className="pickup-note" key={pickup.id}>

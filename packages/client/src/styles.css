@@ -341,3 +341,77 @@ body,
   color: var(--ac-text);
   border-color: var(--ac-accent2);
 }
+
+/* ---------- Weapon pickup button ---------- */
+
+/*
+ * Circular interact button. Anchored in the right-hand control zone rather
+ * than over the player: it is where a thumb already rests on mobile, and it
+ * never obscures the fight. Pointer-events are re-enabled here because the
+ * HUD as a whole is click-through.
+ */
+.pickup-button {
+  pointer-events: auto;
+  position: absolute;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 120px);
+  width: 96px;
+  height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 50%;
+  color: var(--ac-text);
+  background: radial-gradient(circle at 50% 38%, rgba(60, 214, 255, 0.3), rgba(13, 20, 40, 0.92));
+  border: 2px solid var(--ac-accent2);
+  box-shadow:
+    0 0 18px rgba(60, 214, 255, 0.45),
+    inset 0 0 14px rgba(60, 214, 255, 0.2);
+  cursor: pointer;
+  animation: pickup-button-in 140ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pickup-button:active {
+  transform: scale(0.94);
+  background: radial-gradient(circle at 50% 38%, rgba(60, 214, 255, 0.5), rgba(13, 20, 40, 0.92));
+}
+
+/* Downward arrow into a tray: reads as "take this". */
+.pickup-button-glyph {
+  width: 26px;
+  height: 22px;
+  background: var(--ac-accent2);
+  clip-path: polygon(40% 0%, 60% 0%, 60% 45%, 100% 45%, 50% 100%, 0% 45%, 40% 45%);
+}
+
+.pickup-button-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ac-text);
+  max-width: 86px;
+  text-align: center;
+  line-height: 1.15;
+}
+
+.pickup-button-key {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--ac-dim);
+  border: 1px solid rgba(124, 138, 176, 0.5);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+@keyframes pickup-button-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

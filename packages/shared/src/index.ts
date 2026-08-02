@@ -23,7 +23,12 @@ export { physicsSystem } from './sim/systems/physics.js';
 export { weaponsSystem } from './sim/systems/weapons.js';
 export { projectilesSystem } from './sim/systems/projectiles.js';
 export { damageSystem } from './sim/systems/damage.js';
-export { pickupsSystem, initPickups } from './sim/systems/pickups.js';
+export {
+  pickupsSystem,
+  initPickups,
+  findPadUnderPlayer,
+  playerReachesPad,
+} from './sim/systems/pickups.js';
 export { respawnSystem } from './sim/systems/respawn.js';
 export * from './sim/combat/weapon-defs.js';
 export { explode } from './sim/combat/explosions.js';

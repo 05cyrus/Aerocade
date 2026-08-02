@@ -186,6 +186,36 @@ Decisions and why:
 Health and ammo pads are the obvious next kinds; they add a marker and a branch in
 `grantWeapon`'s sibling, not a new architecture.
 
+## ADR-014: Pickup is opt-in; opponents carry overhead health bars
+
+**Weapons are taken, not absorbed.** Walking over a pad no longer swaps your gun. The pad
+offers, and the player accepts with `Buttons.Interact` — the `E` key or a circular on-screen
+button that appears only while you are standing on a stocked pad.
+
+Why: auto-pickup punished movement. Routing over a pad mid-fight could silently replace the
+weapon you were winning with, and the fix under auto-pickup ("switch to your throwaway slot
+before crossing") is a chore, not a skill. Opt-in makes the swap a decision you make when you
+want it, which is also what makes a pad worth standing on to contest.
+
+Mechanics:
+
+- **Edge-triggered.** Holding the button does not vacuum up a pad the moment it respawns; each
+  pickup needs a fresh press. Tested explicitly.
+- **One overlap predicate, `playerReachesPad`, is shared** by the simulation and the UI, so the
+  button can never appear when the sim would refuse — or stay hidden when it would accept.
+- **The button feeds the normal input path.** Tapping it sets a one-shot latch that the game
+  loop ORs into the next tick's `buttons` field, so the sim cannot distinguish tap from
+  keypress and netcode needs no special case.
+- Adding a ninth button meant `sanitizeInput`'s mask could no longer be a hard-coded `0xff`;
+  it is now derived from the `Buttons` table so a new bit can never be silently stripped.
+
+**Health bars float over other players**, read straight from sim health so they track damage
+the instant it lands. Green above half, fading through amber to red. The local player is
+excluded — that is the HUD's job, and a bar on your own head only blocks your view. Bars are
+two tinted sprites from the shared atlas rather than a per-player `Graphics`, which would flush
+the batch every frame (ADR-012); and they live outside the rig container, because the rig
+mirrors on facing and a bar inside it would drain right-to-left.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

@@ -1,15 +1,20 @@
 import { MAX_PICKUPS, MAX_PLAYERS, SIM_DT, WEAPON_SLOTS } from '../../constants.js';
 import { SimEventType } from '../events.js';
+import { Buttons } from '../input.js';
 import { WEAPON_COUNT, weaponDef, type WeaponId } from '../combat/weapon-defs.js';
 import type { SpawnPoint } from '../map/mapdef.js';
 import { TUNING } from '../tuning.js';
 import type { SimWorld } from '../world.js';
 
 /**
- * Weapon pads: fixed spots on the map that hold one gun each, hand it to the
- * first player who touches it, then refill on a timer with a **randomly
+ * Weapon pads: fixed spots on the map that hold one gun each, hand it to a
+ * player who **asks for it**, then refill on a timer with a **randomly
  * rolled** weapon. Pad positions are static map data (`map.weaponPads`);
  * only contents are simulated, so pad index _i_ ↔ pickup slot _i_.
+ *
+ * Pickup is opt-in (ADR-014): standing on a pad does nothing until the player
+ * presses `Buttons.Interact`. The press is edge-detected, so holding the
+ * button does not vacuum up a pad the instant it respawns.
  *
  * The roll uses the world RNG, which lives in the snapshot — so a
  * reconciliation replay or lag-comp rewind reproduces the exact same weapon
@@ -83,18 +88,48 @@ export function initPickups(world: SimWorld): void {
 }
 
 /**
- * Lowest-indexed living player whose body overlaps the pad, or -1.
- * Ties resolve by index so replays agree (ADR-009 iteration rule).
+ * True when a living player's body is within reach of a pad. The UI prompt
+ * and the simulation both call this, so what the button says is always what
+ * the sim will do.
+ */
+export function playerReachesPad(world: SimWorld, player: number, pad: SpawnPoint): boolean {
+  const p = world.players;
+  if (p.connected[player] !== 1 || p.status[player] !== 1) return false;
+  const reachX = TUNING.player.width / 2 + TUNING.pickups.halfSize;
+  const reachY = TUNING.player.height / 2 + TUNING.pickups.halfSize;
+  if (Math.abs((p.posX[player] ?? 0) - pad.x) > reachX) return false;
+  return Math.abs((p.posY[player] ?? 0) - pad.y) <= reachY;
+}
+
+/**
+ * Index of the stocked pad a player is standing on, or -1. Clients call this
+ * to decide whether to offer the pickup button; lowest pad index wins when
+ * two pads overlap, matching the order the sim resolves them in.
+ */
+export function findPadUnderPlayer(world: SimWorld, player: number): number {
+  const pads = world.map.weaponPads;
+  const count = Math.min(pads.length, MAX_PICKUPS);
+  for (let i = 0; i < count; i++) {
+    const pad = pads[i];
+    if (pad === undefined || world.pickups.active[i] !== 1) continue;
+    if (playerReachesPad(world, player, pad)) return i;
+  }
+  return -1;
+}
+
+/**
+ * Lowest-indexed living player who is on the pad **and pressed interact this
+ * tick**, or -1. Ties resolve by index so replays agree (ADR-009).
  */
 function findCollector(world: SimWorld, pad: SpawnPoint): number {
   const p = world.players;
-  const reachX = TUNING.player.width / 2 + TUNING.pickups.halfSize;
-  const reachY = TUNING.player.height / 2 + TUNING.pickups.halfSize;
 
   for (let t = 0; t < MAX_PLAYERS; t++) {
-    if (p.connected[t] !== 1 || p.status[t] !== 1) continue;
-    if (Math.abs((p.posX[t] ?? 0) - pad.x) > reachX) continue;
-    if (Math.abs((p.posY[t] ?? 0) - pad.y) > reachY) continue;
+    if (!playerReachesPad(world, t, pad)) continue;
+    const cmd = world.inputs[t];
+    if (cmd === undefined) continue;
+    const pressed = cmd.buttons & ~(p.prevButtons[t] ?? 0);
+    if ((pressed & Buttons.Interact) === 0) continue;
     return t;
   }
   return -1;

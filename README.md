@@ -145,20 +145,21 @@ Offline capabilities, precisely:
 
 ### Desktop
 
-| Input                     | Action                                        |
-| ------------------------- | --------------------------------------------- |
-| `A` / `D`                 | Move                                          |
-| `Space`                   | Jump; hold for jetpack                        |
-| `S` + `Space`             | Hover (altitude hold, cheaper fuel — ADR-011) |
-| `Shift`                   | Walk                                          |
-| Mouse                     | Aim                                           |
-| Left mouse button         | Fire                                          |
-| `F` or right mouse button | Melee (Spanner Strike)                        |
-| `G`                       | Throw frag grenade                            |
-| `R`                       | Reload                                        |
-| `Q`                       | Switch weapon                                 |
-| `Tab`                     | Scoreboard (planned, M4)                      |
-| `Esc`                     | Pause (planned, M5)                           |
+| Input                     | Action                                                                      |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `A` / `D`                 | Move                                                                        |
+| `Space`                   | Jump; hold for jetpack                                                      |
+| `S` + `Space`             | Hover (altitude hold, cheaper fuel — ADR-011)                               |
+| `Shift`                   | Walk                                                                        |
+| Mouse                     | Aim                                                                         |
+| Left mouse button         | Fire                                                                        |
+| `F` or right mouse button | Melee (Spanner Strike)                                                      |
+| `G`                       | Throw frag grenade                                                          |
+| `R`                       | Reload                                                                      |
+| `Q`                       | Switch weapon                                                               |
+| `E`                       | Take the weapon off the pad you're standing on (or tap the circular button) |
+| `Tab`                     | Scoreboard (planned, M4)                                                    |
+| `Esc`                     | Pause (planned, M5)                                                         |
 
 ### Mobile (twin virtual sticks, M5)
 

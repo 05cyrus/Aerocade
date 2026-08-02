@@ -33,6 +33,12 @@ export interface KillFeedEntry {
   victim: string;
 }
 
+/** The weapon pad the local player is standing on, if any. */
+export interface PickupPrompt {
+  weaponId: number;
+  weaponName: string;
+}
+
 /** Transient "you picked something up" banner. */
 export interface PickupNotice {
   id: number;
@@ -44,6 +50,8 @@ export interface AppState {
   hud: HudState;
   killFeed: readonly KillFeedEntry[];
   pickup: PickupNotice | null;
+  /** Non-null while the pickup button should be on screen. */
+  prompt: PickupPrompt | null;
 }
 
 const initialHud: HudState = {
@@ -68,12 +76,19 @@ let state: AppState = {
   hud: initialHud,
   killFeed: [],
   pickup: null,
+  prompt: null,
 };
 
 const listeners = new Set<() => void>();
 let feedId = 0;
 let pickupId = 0;
 let pickupTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * One-shot latch: the pickup button sets it, the game loop consumes it on the
+ * next tick and feeds Buttons.Interact through the normal input path. Kept out
+ * of React state deliberately — it is input, not something to render.
+ */
+let interactRequested = false;
 
 function notify(): void {
   for (const l of listeners) l();
@@ -92,8 +107,27 @@ export const appStore = {
   reset(): void {
     if (pickupTimer !== null) clearTimeout(pickupTimer);
     pickupTimer = null;
-    state = { ...state, hud: { ...initialHud }, killFeed: [], pickup: null };
+    state = { ...state, hud: { ...initialHud }, killFeed: [], pickup: null, prompt: null };
+    interactRequested = false;
     notify();
+  },
+  /** Show or hide the pickup button; no-ops when nothing changed. */
+  setPrompt(prompt: PickupPrompt | null): void {
+    const current = state.prompt;
+    if (current === prompt) return;
+    if (current !== null && prompt !== null && current.weaponId === prompt.weaponId) return;
+    state = { ...state, prompt };
+    notify();
+  },
+  /** Called by the pickup button (tap or click). */
+  requestInteract(): void {
+    interactRequested = true;
+  },
+  /** Called once per sim tick by the game loop. */
+  consumeInteract(): boolean {
+    const requested = interactRequested;
+    interactRequested = false;
+    return requested;
   },
   /** Flash a pickup banner; a newer pickup replaces an older one. */
   showPickup(text: string): void {

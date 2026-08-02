@@ -9,6 +9,7 @@ import {
   addPlayer,
   createFoundryMap,
   createMatch,
+  findPadUnderPlayer,
   setInput,
   stepWorld,
   weaponDef,
@@ -128,13 +129,16 @@ export class GameSession implements SceneDriver {
     if (scene === null) return;
 
     const sampled = this.input.sample();
+    // The on-screen pickup button feeds the same input path as the E key, so
+    // the simulation cannot tell tap from keypress.
+    const buttons = sampled.buttons | (appStore.consumeInteract() ? Buttons.Interact : 0);
     this.lastAim = scene.computeAimFor(this.localPlayer, this.interp);
     setInput(this.world, this.localPlayer, {
       seq: this.world.tick,
       moveX: sampled.moveX,
       moveY: sampled.moveY,
       aim: this.lastAim,
-      buttons: sampled.buttons,
+      buttons,
     });
     this.driveDummies();
 
@@ -143,6 +147,7 @@ export class GameSession implements SceneDriver {
     scene.applyEvents(this.world);
     scene.emitTickEffects(this.world);
     this.consumeEvents();
+    this.publishPrompt();
 
     if (this.world.tick % HUD_EVERY_TICKS === 0) this.publishHud();
   }
@@ -180,6 +185,22 @@ export class GameSession implements SceneDriver {
         appStore.showPickup(ev.r === 1 ? `${name} AMMO` : `PICKED UP ${name}`);
       }
     });
+  }
+
+  /**
+   * Offer the pickup button whenever the local player is standing on a stocked
+   * pad. Evaluated every tick (it is a handful of distance checks) but pushed
+   * to React only on change, so stepping onto a pad shows the button instantly
+   * without costing a render per frame.
+   */
+  private publishPrompt(): void {
+    const padIndex = findPadUnderPlayer(this.world, this.localPlayer);
+    if (padIndex === -1) {
+      appStore.setPrompt(null);
+      return;
+    }
+    const weaponId = (this.world.pickups.weapon[padIndex] ?? 0) as WeaponId;
+    appStore.setPrompt({ weaponId, weaponName: weaponDef(weaponId).name });
   }
 
   private nameOf(slot: number): string {

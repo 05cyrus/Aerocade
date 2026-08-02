@@ -7,7 +7,8 @@ import { Buttons, type ButtonMask } from '@aerocade/shared';
  * the camera transform); this class owns buttons and move axes only.
  *
  * Bindings (docs/ui.md): A/D move, Space jump + jetpack, S hover,
- * Shift walk, LMB fire, RMB melee, G grenade, R reload, Q switch weapon.
+ * Shift walk, LMB fire, RMB melee, G grenade, R reload, Q switch weapon,
+ * E take the weapon on the pad you are standing on.
  */
 export class KeyboardMouseInput {
   private readonly down = new Set<string>();
@@ -89,6 +90,7 @@ export class KeyboardMouseInput {
     if (this.active('KeyR')) buttons |= Buttons.Reload;
     if (this.active('KeyQ')) buttons |= Buttons.SwitchWeapon;
     if (this.active('KeyF')) buttons |= Buttons.Melee;
+    if (this.active('KeyE')) buttons |= Buttons.Interact;
     if (this.mouseActive(0)) buttons |= Buttons.Fire;
     if (this.mouseActive(2)) buttons |= Buttons.Melee;
 

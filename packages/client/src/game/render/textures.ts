@@ -54,6 +54,8 @@ export const Frames = {
   Grenade: 'grenade',
   Spark: 'spark',
   Muzzle: 'muzzle',
+  /** Glowing floor disc marking a weapon pad. */
+  Pad: 'pad',
 } as const;
 
 /** Atlas frame name for a weapon's held silhouette. */
@@ -122,6 +124,7 @@ function collectParts(): Part[] {
     { name: weaponFrame(WeaponId.Lobber), w: 42, h: 24, draw: drawLobber },
     { name: Frames.Rocket, w: 16, h: 6, draw: drawRocket },
     { name: Frames.Grenade, w: 10, h: 10, draw: drawGrenade },
+    { name: Frames.Pad, w: 48, h: 20, draw: drawPad },
     {
       name: Frames.Spark,
       w: 16,
@@ -320,6 +323,21 @@ function drawGrenade(g: Phaser.GameObjects.Graphics, ox: number, oy: number): vo
   g.fillCircle(ox + 5, oy + 5, 5);
   g.fillStyle(0x101828, 1);
   g.fillRect(ox + 4, oy, 2, 3); // pin nub
+}
+
+/**
+ * Weapon-pad marker: a flat glowing disc that sits on the floor so players can
+ * spot a pad — and tell a stocked one from an empty one — at a glance.
+ */
+function drawPad(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  for (let i = 6; i >= 1; i--) {
+    g.fillStyle(0x3cd6ff, 0.05 + 0.05 * (6 - i));
+    g.fillEllipse(ox + 24, oy + 12, 8 + i * 6.5, 4 + i * 2.6);
+  }
+  g.fillStyle(0x3cd6ff, 0.55);
+  g.fillEllipse(ox + 24, oy + 12, 26, 9);
+  g.fillStyle(0xdff4ff, 0.75);
+  g.fillEllipse(ox + 24, oy + 12, 14, 5);
 }
 
 /** Cheap radial falloff: concentric circles at decreasing alpha. */

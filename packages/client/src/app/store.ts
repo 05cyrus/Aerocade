@@ -33,10 +33,17 @@ export interface KillFeedEntry {
   victim: string;
 }
 
+/** Transient "you picked something up" banner. */
+export interface PickupNotice {
+  id: number;
+  text: string;
+}
+
 export interface AppState {
   screen: Screen;
   hud: HudState;
   killFeed: readonly KillFeedEntry[];
+  pickup: PickupNotice | null;
 }
 
 const initialHud: HudState = {
@@ -60,10 +67,13 @@ let state: AppState = {
   screen: 'menu',
   hud: initialHud,
   killFeed: [],
+  pickup: null,
 };
 
 const listeners = new Set<() => void>();
 let feedId = 0;
+let pickupId = 0;
+let pickupTimer: ReturnType<typeof setTimeout> | null = null;
 
 function notify(): void {
   for (const l of listeners) l();
@@ -80,8 +90,24 @@ export const appStore = {
   },
   /** Fresh-session state; called when a game session starts so nothing leaks between matches. */
   reset(): void {
-    state = { ...state, hud: { ...initialHud }, killFeed: [] };
+    if (pickupTimer !== null) clearTimeout(pickupTimer);
+    pickupTimer = null;
+    state = { ...state, hud: { ...initialHud }, killFeed: [], pickup: null };
     notify();
+  },
+  /** Flash a pickup banner; a newer pickup replaces an older one. */
+  showPickup(text: string): void {
+    pickupId += 1;
+    const id = pickupId;
+    state = { ...state, pickup: { id, text } };
+    notify();
+    if (pickupTimer !== null) clearTimeout(pickupTimer);
+    pickupTimer = setTimeout(() => {
+      pickupTimer = null;
+      if (state.pickup?.id !== id) return;
+      state = { ...state, pickup: null };
+      notify();
+    }, 1600);
   },
   setScreen(screen: Screen): void {
     state = { ...state, screen };

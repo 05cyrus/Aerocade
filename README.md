@@ -16,19 +16,21 @@ networking, and an installable PWA shell.
 
 Honest status per milestone (full plan in [docs/roadmap.md](docs/roadmap.md)):
 
-| Feature                                                                    | Milestone | Status                                              |
-| -------------------------------------------------------------------------- | --------- | --------------------------------------------------- |
-| Deterministic 60 Hz sim core, ECS-lite pools, seeded RNG                   | M1        | Done                                                |
-| Local sandbox: run/jump/jetpack (with hover), aim, shoot, damage, respawn  | M1        | Done                                                |
-| First map: **Foundry** (48×27 tile arena) + HUD                            | M1        | Done                                                |
-| LAN bridge, room discovery, WebRTC DataChannels + WebSocket relay fallback | M2        | Done                                                |
-| Client prediction, reconciliation, snapshot interpolation, Playwright e2e  | M2        | Done                                                |
-| Full weapon roster, grenades, melee, pickups, lag compensation             | M3        | In progress (Arclight Beam and Emberjet land in M3) |
-| Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen     | M4        | Planned                                             |
-| Mobile twin-stick controls, Gamepad API, settings, generated audio         | M5        | Planned                                             |
-| PWA polish, more maps, moving platforms/jump pads, perf hardening          | M6        | Planned                                             |
-| AI opponents, Survival waves, Training mode                                | M7        | Planned                                             |
-| Release hardening: soak tests, docs completion, packaging                  | M8        | Planned                                             |
+| Feature                                                                   | Milestone | Status                                                                                                   |
+| ------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------- |
+| Deterministic 60 Hz sim core, ECS-lite pools, seeded RNG                  | M1        | Done                                                                                                     |
+| Local sandbox: run/jump/jetpack (with hover), aim, shoot, damage, respawn | M1        | Done                                                                                                     |
+| Articulated soldier rig with run cycle and per-weapon held guns           | M1        | Done                                                                                                     |
+| First map: **Foundry** (48×27 tile arena) + HUD                           | M1        | Done                                                                                                     |
+| LAN bridge: static hosting, rooms, WebRTC signaling, WS relay fallback    | M2        | Partial — bridge done; browser transport next                                                            |
+| Client prediction, reconciliation, snapshot interpolation, Playwright e2e | M2        | Planned                                                                                                  |
+| Weapon pads: fixed spots, random guns, timed respawn                      | M3        | Done                                                                                                     |
+| Full roster + lag compensation                                            | M3        | Partial — 7 weapons, grenades, melee done; Arclight Beam, Emberjet, health/ammo pads and lag comp remain |
+| Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen    | M4        | Planned                                                                                                  |
+| Mobile twin-stick controls, Gamepad API, settings, generated audio        | M5        | Planned                                                                                                  |
+| PWA polish, more maps, moving platforms/jump pads, perf hardening         | M6        | Planned                                                                                                  |
+| AI opponents, Survival waves, Training mode                               | M7        | Planned                                                                                                  |
+| Release hardening: soak tests, docs completion, packaging                 | M8        | Planned                                                                                                  |
 
 ## Tech stack
 

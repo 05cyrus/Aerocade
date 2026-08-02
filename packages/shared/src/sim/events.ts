@@ -20,6 +20,10 @@ export const SimEventType = {
   GrenadeThrow: 9,
   /** One hitscan pellet's resolved path end, for tracer rendering. */
   Trace: 10,
+  /** A weapon pad refilled with a freshly rolled weapon. */
+  PickupSpawn: 11,
+  /** A player collected a weapon pad. */
+  PickupTaken: 12,
 } as const;
 
 export type SimEventType = (typeof SimEventType)[keyof typeof SimEventType];
@@ -37,6 +41,9 @@ export type SimEventType = (typeof SimEventType)[keyof typeof SimEventType];
  * - MeleeSwing:    a=player, b=1 if it connected, x/y=player position
  * - GrenadeThrow:  a=player, x/y=throw origin
  * - Trace:         a=shooter, b=weaponId, x/y=pellet path endpoint
+ * - PickupSpawn:   a=padIndex, b=weaponId, x/y=pad position
+ * - PickupTaken:   a=player, b=weaponId, x/y=pad position, r=1 if it was an
+ *                  ammo top-up (player already carried that weapon)
  */
 export interface SimEvent {
   type: SimEventType;

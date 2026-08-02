@@ -4,6 +4,7 @@ import { useAppState } from '../store.js';
 export function Hud(): ReactElement {
   const hud = useAppState((s) => s.hud);
   const killFeed = useAppState((s) => s.killFeed);
+  const pickup = useAppState((s) => s.pickup);
 
   const healthFrac = hud.maxHealth > 0 ? hud.health / hud.maxHealth : 0;
   const fuelFrac = hud.maxFuel > 0 ? hud.fuel / hud.maxFuel : 0;
@@ -57,6 +58,12 @@ export function Hud(): ReactElement {
           ))}
         </div>
       </div>
+
+      {pickup !== null && (
+        <div className="pickup-note" key={pickup.id}>
+          {pickup.text}
+        </div>
+      )}
 
       {hud.protectFor > 0 && hud.respawnIn === 0 && (
         <div className="protect-note">SPAWN SHIELD — fire to drop it</div>

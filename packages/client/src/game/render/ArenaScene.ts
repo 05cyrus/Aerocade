@@ -5,12 +5,21 @@ import {
   MAX_PROJECTILES,
   ProjectileKind,
   SimEventType,
+  TUNING,
   WEAPON_SLOTS,
   isSolid,
   type SimWorld,
   type WeaponId,
 } from '@aerocade/shared';
-import { ATLAS, Frames, generateTextures, PLAYER_COLORS, PX_PER_M, RIG_SCALE } from './textures.js';
+import {
+  ATLAS,
+  Frames,
+  generateTextures,
+  PLAYER_COLORS,
+  PX_PER_M,
+  RIG_SCALE,
+  weaponFrame,
+} from './textures.js';
 import { PlayerRig } from './PlayerRig.js';
 import type { RenderInterpolator } from './RenderInterpolator.js';
 
@@ -21,6 +30,11 @@ const VIEW_HEIGHT_M = 15.5;
 const AIM_LOOKAHEAD = 0.12;
 const MAX_TRACERS = 32;
 const MAX_RINGS = 8;
+/** Pad disc sits just below the tile center so it reads as lying on the floor. */
+const PAD_DISC_OFFSET_PX = 15;
+/** Hover animation for a stocked pad's gun. */
+const PAD_BOB_PX = 3.5;
+const PAD_BOB_SPEED = 0.0028;
 
 interface Tracer {
   x1: number;
@@ -56,11 +70,15 @@ export class ArenaScene extends Phaser.Scene {
 
   private rigs: PlayerRig[] = [];
   private projectileSprites = new Map<number, Phaser.GameObjects.Sprite>();
+  /** One pad disc + one floating gun per map weapon pad, allocated once. */
+  private padDiscs: Phaser.GameObjects.Sprite[] = [];
+  private padGuns: Phaser.GameObjects.Sprite[] = [];
   private cameraTarget!: Phaser.GameObjects.Rectangle;
   private overlay!: Phaser.GameObjects.Graphics;
   private explosionEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private jetEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private deathEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private pickupEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   private readonly tracers: Tracer[] = [];
   private readonly rings: Ring[] = [];
@@ -76,6 +94,7 @@ export class ArenaScene extends Phaser.Scene {
   create(): void {
     generateTextures(this);
     this.buildTiles();
+    this.buildPickups();
     this.buildPlayers();
     this.buildEffects();
     this.buildCamera();
@@ -99,6 +118,27 @@ export class ArenaScene extends Phaser.Scene {
           this.add.image(tx * PX_PER_M, ty * PX_PER_M, ATLAS, Frames.Tile).setOrigin(0, 0);
         }
       }
+    }
+  }
+
+  /**
+   * Weapon pads are static map geometry, so their sprites are built once:
+   * a floor disc that dims while the pad is empty, and the gun hovering above
+   * it. Both are pooled by pad index — no churn when pads are looted.
+   */
+  private buildPickups(): void {
+    for (const pad of this.world.map.weaponPads) {
+      const x = pad.x * PX_PER_M;
+      const y = pad.y * PX_PER_M;
+      this.padDiscs.push(
+        this.add
+          .sprite(x, y + PAD_DISC_OFFSET_PX, ATLAS, Frames.Pad)
+          .setScale(RIG_SCALE)
+          .setDepth(1),
+      );
+      this.padGuns.push(
+        this.add.sprite(x, y, ATLAS, Frames.Rocket).setScale(RIG_SCALE).setDepth(2),
+      );
     }
   }
 
@@ -133,6 +173,15 @@ export class ArenaScene extends Phaser.Scene {
       lifespan: { min: 300, max: 700 },
       scale: { start: 0.9, end: 0 },
       tint: [0xff4d5e, 0xdbe6ff],
+      emitting: false,
+    });
+    this.pickupEmitter = this.add.particles(0, 0, ATLAS, {
+      frame: Frames.Spark,
+      speed: { min: 20, max: 110 },
+      lifespan: { min: 200, max: 420 },
+      scale: { start: 0.6, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      tint: [0x3cd6ff, 0xdff4ff],
       emitting: false,
     });
     this.overlay = this.add.graphics().setDepth(10);
@@ -202,9 +251,46 @@ export class ArenaScene extends Phaser.Scene {
       rig.setAlpha((p.protect[i] ?? 0) > 0 ? 0.55 + 0.3 * Math.sin(this.time.now / 60) : 1);
     }
 
+    this.renderPickups();
     this.renderProjectiles(interp, alpha);
     this.renderOverlay(deltaMs);
     this.moveCamera(interp, alpha);
+  }
+
+  /**
+   * Pads are state-driven, not event-driven: a stocked pad shows its gun
+   * bobbing over a bright disc, a looted one dims to a faint marker so
+   * players still know where to come back to.
+   */
+  private renderPickups(): void {
+    const pads = this.world.map.weaponPads;
+    const pk = this.world.pickups;
+    const bob = Math.sin(this.time.now * PAD_BOB_SPEED) * PAD_BOB_PX;
+
+    for (let i = 0; i < pads.length; i++) {
+      const pad = pads[i];
+      const disc = this.padDiscs[i];
+      const gun = this.padGuns[i];
+      if (pad === undefined || disc === undefined || gun === undefined) continue;
+
+      const stocked = pk.active[i] === 1;
+      gun.setVisible(stocked);
+      if (!stocked) {
+        // An empty pad stays visible but dim, and brightens as its refill
+        // approaches — players can read "this is about to restock" from
+        // across the arena and time a return.
+        const left = pk.respawnIn[i] ?? 0;
+        const readiness = 1 - Math.min(1, left / TUNING.pickups.weaponRespawnDelay);
+        disc.setAlpha(0.18 + 0.34 * readiness);
+        continue;
+      }
+
+      disc.setAlpha(0.95);
+
+      const frame = weaponFrame((pk.weapon[i] ?? 0) as WeaponId);
+      if (gun.frame.name !== frame) gun.setFrame(frame);
+      gun.setY(pad.y * PX_PER_M + bob);
+    }
   }
 
   private renderProjectiles(interp: RenderInterpolator, alpha: number): void {
@@ -348,6 +434,15 @@ export class ArenaScene extends Phaser.Scene {
         }
         case SimEventType.GrenadeBounce: {
           this.explosionEmitter.explode(2, ev.x * PX_PER_M, ev.y * PX_PER_M);
+          break;
+        }
+        case SimEventType.PickupTaken: {
+          this.pickupEmitter.explode(14, ev.x * PX_PER_M, ev.y * PX_PER_M);
+          break;
+        }
+        case SimEventType.PickupSpawn: {
+          // A soft puff announces a pad refilling, so players notice restocks.
+          this.pickupEmitter.explode(8, ev.x * PX_PER_M, ev.y * PX_PER_M);
           break;
         }
         default:

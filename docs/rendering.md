@@ -100,11 +100,11 @@ sim, touching only entities whose `alive` flag is set.
 Sim pools are fixed-capacity (players ×8, projectiles ×256, pickups ×64). The renderer
 allocates matching sprite pools **once** in `ArenaScene.create` and never afterwards:
 
-| Sim pool         | Render pool                                    | Sync rule                                               |
-| ---------------- | ---------------------------------------------- | ------------------------------------------------------- |
-| players ×8       | 8 articulated rigs (7 sprites each, see below) | index _i_ sim ↔ index _i_ rig                           |
-| projectiles ×256 | 256 sprites                                    | atlas frame swapped by projectile kind on activation    |
-| pickups ×64      | 64 sprites                                     | bob/pulse tween driven by render clock, position by sim |
+| Sim pool         | Render pool                                    | Sync rule                                                |
+| ---------------- | ---------------------------------------------- | -------------------------------------------------------- |
+| players ×8       | 8 articulated rigs (7 sprites each, see below) | index _i_ sim ↔ index _i_ rig                            |
+| projectiles ×256 | 256 sprites                                    | atlas frame swapped by projectile kind on activation     |
+| pickups ×64      | 1 floor disc + 1 gun sprite per map weapon pad | pad positions are static map data; only contents animate |
 
 Sync per frame: if `alive[i]` and sprite hidden → activate (`setVisible(true)`, assign
 texture); if dead and visible → deactivate. Active sprites get position/rotation/flip written
@@ -135,6 +135,15 @@ container per player on the display list.
 
 Spawn protection (2.5 s) renders as an alpha pulse on the whole rig; death spawns a short
 tumble of armor pieces. Reload and low-fuel states are HUD concerns, not sprite concerns.
+
+### Weapon pads
+
+Pads are drawn state-driven, never event-driven, so they are correct on the first frame after a
+snapshot or a reconciliation rewind. A stocked pad shows its gun — the real atlas frame for
+whatever weapon it currently holds — bobbing over a bright floor disc. A looted pad keeps the
+disc but dims it, then **brightens it as the refill approaches**: readiness is
+`1 − respawnIn / weaponRespawnDelay`, so a player across the arena can read "that pad is about
+to restock" and time a return. Collection and refill each emit a short particle puff.
 
 ## Procedural textures — zero external assets
 

@@ -3,8 +3,15 @@
  * Authored as ASCII art for now; a binary/JSON format plus editor arrives
  * post-1.0 (see docs/roadmap.md).
  *
- * Legend: '#' solid, '.' empty, 'S' spawn point (empty tile).
+ * Legend:
+ *   '#' solid
+ *   '.' empty
+ *   'S' player spawn point (empty tile)
+ *   'W' weapon pad — a fixed spot that holds one gun and refills it on a
+ *       timer with a randomly rolled weapon (see systems/pickups.ts)
  */
+
+import { MAX_PICKUPS } from '../../constants.js';
 
 export interface SpawnPoint {
   /** Tile-center coordinates (x + 0.5, y + 0.5 of the marker tile). */
@@ -21,6 +28,11 @@ export interface MapDef {
   /** Row-major solidity grid, `width * height` entries of 0 | 1. */
   solid: Uint8Array;
   spawnPoints: readonly SpawnPoint[];
+  /**
+   * Weapon pad positions. Index _i_ here is pickup slot _i_ in the sim's
+   * pickup pool — pads are static, so only their contents are simulated.
+   */
+  weaponPads: readonly SpawnPoint[];
 }
 
 export function isSolid(map: MapDef, tileX: number, tileY: number): boolean {
@@ -41,6 +53,7 @@ export function parseAsciiMap(id: string, name: string, rows: readonly string[])
 
   const solid = new Uint8Array(width * height);
   const spawnPoints: SpawnPoint[] = [];
+  const weaponPads: SpawnPoint[] = [];
 
   for (let y = 0; y < height; y++) {
     const row = rows[y];
@@ -55,6 +68,8 @@ export function parseAsciiMap(id: string, name: string, rows: readonly string[])
         solid[y * width + x] = 1;
       } else if (ch === 'S') {
         spawnPoints.push({ x: x + 0.5, y: y + 0.5 });
+      } else if (ch === 'W') {
+        weaponPads.push({ x: x + 0.5, y: y + 0.5 });
       } else if (ch !== '.') {
         throw new Error(`map ${id}: unknown tile '${ch ?? ''}' at ${String(x)},${String(y)}`);
       }
@@ -66,6 +81,11 @@ export function parseAsciiMap(id: string, name: string, rows: readonly string[])
       `map ${id}: needs at least 2 spawn points, found ${String(spawnPoints.length)}`,
     );
   }
+  if (weaponPads.length > MAX_PICKUPS) {
+    throw new Error(
+      `map ${id}: ${String(weaponPads.length)} weapon pads exceeds the ${String(MAX_PICKUPS)} pickup pool`,
+    );
+  }
 
-  return { id, name, width, height, solid, spawnPoints };
+  return { id, name, width, height, solid, spawnPoints, weaponPads };
 }

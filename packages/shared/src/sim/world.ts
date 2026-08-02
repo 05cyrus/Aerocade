@@ -1,5 +1,6 @@
 import {
   MAX_DAMAGE_REQUESTS,
+  MAX_PICKUPS,
   MAX_PLAYERS,
   MAX_PROJECTILES,
   NO_PLAYER,
@@ -150,6 +151,22 @@ export class ProjectilePool {
   }
 }
 
+/**
+ * Weapon pads. Slot _i_ corresponds to `map.weaponPads[i]`, so positions are
+ * static map data and only the contents are simulated: which weapon is on the
+ * pad, whether it is collectable, and how long until it refills.
+ */
+export class PickupPool {
+  /** 1 while a weapon is sitting on the pad and can be collected. */
+  readonly active = new Uint8Array(MAX_PICKUPS);
+  /** WeaponId currently offered (meaningful only while active). */
+  readonly weapon = new Uint8Array(MAX_PICKUPS);
+  /** Seconds until the pad refills; 0 while active. */
+  readonly respawnIn = new Float32Array(MAX_PICKUPS);
+
+  readonly all: readonly PoolArray[] = [this.active, this.weapon, this.respawnIn];
+}
+
 /** One queued damage application; consumed by the damage system each tick. */
 export interface DamageRequest {
   target: number;
@@ -211,12 +228,17 @@ export interface SimWorld {
   readonly map: MapDef;
   readonly players: PlayerPool;
   readonly projectiles: ProjectilePool;
+  readonly pickups: PickupPool;
   readonly damage: DamageQueue;
   readonly events: EventBuffer;
   /** Current-tick input per player slot; set via `setInput` before stepping. */
   readonly inputs: readonly InputCommand[];
 }
 
+/**
+ * Build an empty world. Callers then add players and stock the weapon pads —
+ * `createMatch` in `match.ts` does both and is what game code should use.
+ */
 export function createWorld(map: MapDef, seed: number): SimWorld {
   return {
     tick: 0,
@@ -224,6 +246,7 @@ export function createWorld(map: MapDef, seed: number): SimWorld {
     map,
     players: new PlayerPool(),
     projectiles: new ProjectilePool(),
+    pickups: new PickupPool(),
     damage: new DamageQueue(),
     events: new EventBuffer(),
     inputs: Array.from({ length: MAX_PLAYERS }, () => emptyInput()),
@@ -252,10 +275,17 @@ export interface Snapshot {
   rngState: number;
   players: PlayerPool;
   projectiles: ProjectilePool;
+  pickups: PickupPool;
 }
 
 export function createSnapshot(): Snapshot {
-  return { tick: 0, rngState: 0, players: new PlayerPool(), projectiles: new ProjectilePool() };
+  return {
+    tick: 0,
+    rngState: 0,
+    players: new PlayerPool(),
+    projectiles: new ProjectilePool(),
+    pickups: new PickupPool(),
+  };
 }
 
 export function takeSnapshot(world: SimWorld, out: Snapshot): Snapshot {
@@ -263,6 +293,7 @@ export function takeSnapshot(world: SimWorld, out: Snapshot): Snapshot {
   out.rngState = world.rng.state;
   copyArrays(world.players.all, out.players.all);
   copyArrays(world.projectiles.all, out.projectiles.all);
+  copyArrays(world.pickups.all, out.pickups.all);
   return out;
 }
 
@@ -271,6 +302,7 @@ export function restoreSnapshot(world: SimWorld, snap: Snapshot): void {
   world.rng.state = snap.rngState;
   copyArrays(snap.players.all, world.players.all);
   copyArrays(snap.projectiles.all, world.projectiles.all);
+  copyArrays(snap.pickups.all, world.pickups.all);
 }
 
 /**
@@ -291,7 +323,7 @@ export function stateHash(world: SimWorld): number {
   mix((world.rng.state >>> 8) & 0xff);
   mix((world.rng.state >>> 16) & 0xff);
   mix((world.rng.state >>> 24) & 0xff);
-  const pools = [world.players.all, world.projectiles.all];
+  const pools = [world.players.all, world.projectiles.all, world.pickups.all];
   for (const pool of pools) {
     for (const arr of pool) {
       const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);

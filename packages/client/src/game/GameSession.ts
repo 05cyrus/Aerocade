@@ -8,7 +8,7 @@ import {
   WEAPON_SLOTS,
   addPlayer,
   createFoundryMap,
-  createWorld,
+  createMatch,
   setInput,
   stepWorld,
   weaponDef,
@@ -65,7 +65,7 @@ export class GameSession implements SceneDriver {
     appStore.reset(); // no HUD/kill-feed state may leak from a previous match
     // The sandbox is local-only; wall-clock seeding is fine (the sim itself
     // stays deterministic per seed — networked seeds come from the host).
-    this.world = createWorld(createFoundryMap(), Date.now() >>> 0);
+    this.world = createMatch(createFoundryMap(), Date.now() >>> 0);
     this.localPlayer = addPlayer(this.world);
     this.dummies.push(addPlayer(this.world), addPlayer(this.world));
 
@@ -175,6 +175,9 @@ export class GameSession implements SceneDriver {
     this.world.events.forEach((ev) => {
       if (ev.type === SimEventType.Death) {
         appStore.pushKill(this.nameOf(ev.b), this.nameOf(ev.a));
+      } else if (ev.type === SimEventType.PickupTaken && ev.a === this.localPlayer) {
+        const name = weaponDef(ev.b as WeaponId).name.toUpperCase();
+        appStore.showPickup(ev.r === 1 ? `${name} AMMO` : `PICKED UP ${name}`);
       }
     });
   }

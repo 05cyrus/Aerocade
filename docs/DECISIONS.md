@@ -156,6 +156,36 @@ A dev-only `window.__aeroDebug` hook plus `packages/client/scripts/screenshot-sa
 (headless Chromium) exist to eyeball renderer changes and to A/B render cost; the hook is
 stripped from production builds by `import.meta.env.DEV`.
 
+## ADR-013: Weapon pads — fixed places, random contents
+
+Guns are not chosen at spawn; they are fought over. The map defines fixed **weapon pads**
+(`'W'` in the ASCII map), each holding one gun. Touch it and it is yours; the pad then sits
+empty for `weaponRespawnDelay` (12 s) and refills with a **randomly rolled** weapon.
+
+Decisions and why:
+
+- **Fixed places, random contents.** Fixed positions make pads learnable map knowledge —
+  routes, timings, and contests form around them. Random contents keep every cycle a fresh
+  decision rather than a memorized pickup order.
+- **Pad index ↔ pickup slot.** Pad positions are static map data, so the sim stores only
+  contents (`active`, `weapon`, `respawnIn`). Snapshots stay small and the renderer needs no
+  lookup map.
+- **Never the same weapon twice in a row.** A refill that repeats the weapon just taken gives
+  players nothing to come back for. On a repeat we shift by a second draw instead of looping —
+  a fixed number of RNG draws per refill keeps the stream length predictable, which matters for
+  reconciliation replays.
+- **The roll uses the world RNG** (in the snapshot), so a replay or lag-comp rewind reproduces
+  the same weapon on the same pad (ADR-009). It must never use `Math.random`.
+- **Collecting replaces the _active_ slot**, fully loaded, and leaves the other slot alone —
+  so switching to your throwaway slot before stepping on a pad is a real, learnable skill.
+  Walking over a weapon you already carry tops up that slot's reserve ammo instead of swapping,
+  so a duplicate is never a downgrade.
+- **Contested pads resolve by ascending player index**, like every other tie in the sim, so
+  hosts and replays agree on who got it.
+
+Health and ammo pads are the obvious next kinds; they add a marker and a branch in
+`grantWeapon`'s sibling, not a new architecture.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

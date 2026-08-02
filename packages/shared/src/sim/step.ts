@@ -2,6 +2,7 @@ import { MAX_PLAYERS } from '../constants.js';
 import { damageSystem } from './systems/damage.js';
 import { movementSystem } from './systems/movement.js';
 import { physicsSystem } from './systems/physics.js';
+import { pickupsSystem } from './systems/pickups.js';
 import { projectilesSystem } from './systems/projectiles.js';
 import { respawnSystem } from './systems/respawn.js';
 import { weaponsSystem } from './systems/weapons.js';
@@ -24,6 +25,7 @@ export function stepWorld(world: SimWorld): void {
   weaponsSystem(world);
   projectilesSystem(world);
   damageSystem(world);
+  pickupsSystem(world);
   respawnSystem(world);
 
   const p = world.players;

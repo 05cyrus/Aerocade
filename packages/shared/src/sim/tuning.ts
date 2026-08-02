@@ -95,6 +95,16 @@ export const TUNING = {
     /** Knockback impulse per point of hitscan damage dealt. */
     hitscanKnockbackPerDamage: 0.12,
   },
+  pickups: {
+    /**
+     * Seconds a weapon pad stays empty after being looted before it refills
+     * with a freshly rolled random weapon. Long enough that pads are worth
+     * contesting, short enough that a match never runs dry.
+     */
+    weaponRespawnDelay: 12,
+    /** Half-extent of a pad's collection box, meters. */
+    halfSize: 0.55,
+  },
   match: {
     /** Default match length (used from M4; the sandbox ignores it). */
     durationSeconds: 480,

@@ -280,6 +280,37 @@ body,
   color: var(--ac-text);
 }
 
+.pickup-note {
+  position: absolute;
+  top: 26%;
+  width: 100%;
+  text-align: center;
+  color: var(--ac-accent2);
+  letter-spacing: 0.14em;
+  font-size: 17px;
+  font-weight: 700;
+  text-shadow: 0 0 14px rgba(60, 214, 255, 0.7);
+  animation: pickup-rise 1.6s ease-out forwards;
+}
+
+@keyframes pickup-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+  14% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
 .protect-note {
   position: absolute;
   top: 18%;

@@ -5,11 +5,13 @@ import {
   MAX_PROJECTILES,
   ProjectileKind,
   SimEventType,
-  TUNING,
+  WEAPON_SLOTS,
   isSolid,
   type SimWorld,
+  type WeaponId,
 } from '@aerocade/shared';
-import { generateTextures, PLAYER_COLORS, PX_PER_M, TextureKeys } from './textures.js';
+import { ATLAS, Frames, generateTextures, PLAYER_COLORS, PX_PER_M, RIG_SCALE } from './textures.js';
+import { PlayerRig } from './PlayerRig.js';
 import type { RenderInterpolator } from './RenderInterpolator.js';
 
 /** Target visible area in meters; zoom adapts the viewport to show this much. */
@@ -52,8 +54,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly world: SimWorld;
   private readonly localPlayer: number;
 
-  private playerBodies: Phaser.GameObjects.Sprite[] = [];
-  private playerBarrels: Phaser.GameObjects.Sprite[] = [];
+  private rigs: PlayerRig[] = [];
   private projectileSprites = new Map<number, Phaser.GameObjects.Sprite>();
   private cameraTarget!: Phaser.GameObjects.Rectangle;
   private overlay!: Phaser.GameObjects.Graphics;
@@ -95,7 +96,7 @@ export class ArenaScene extends Phaser.Scene {
     for (let ty = 0; ty < map.height; ty++) {
       for (let tx = 0; tx < map.width; tx++) {
         if (isSolid(map, tx, ty)) {
-          this.add.image(tx * PX_PER_M, ty * PX_PER_M, TextureKeys.Tile).setOrigin(0, 0);
+          this.add.image(tx * PX_PER_M, ty * PX_PER_M, ATLAS, Frames.Tile).setOrigin(0, 0);
         }
       }
     }
@@ -103,28 +104,21 @@ export class ArenaScene extends Phaser.Scene {
 
   private buildPlayers(): void {
     for (let i = 0; i < MAX_PLAYERS; i++) {
-      const body = this.add
-        .sprite(0, 0, TextureKeys.Player)
-        .setTint(PLAYER_COLORS[i % PLAYER_COLORS.length])
-        .setVisible(false);
-      const barrel = this.add
-        .sprite(0, 0, TextureKeys.Barrel)
-        .setOrigin(0.1, 0.5)
-        .setVisible(false);
-      this.playerBodies.push(body);
-      this.playerBarrels.push(barrel);
+      this.rigs.push(new PlayerRig(this, PLAYER_COLORS[i % PLAYER_COLORS.length] ?? 0xffffff));
     }
   }
 
   private buildEffects(): void {
-    this.explosionEmitter = this.add.particles(0, 0, TextureKeys.Spark, {
+    this.explosionEmitter = this.add.particles(0, 0, ATLAS, {
+      frame: Frames.Spark,
       speed: { min: 60, max: 340 },
       lifespan: { min: 250, max: 550 },
       scale: { start: 1.2, end: 0 },
       tint: [0xffa03c, 0xffe0a0, 0xff4d5e],
       emitting: false,
     });
-    this.jetEmitter = this.add.particles(0, 0, TextureKeys.Spark, {
+    this.jetEmitter = this.add.particles(0, 0, ATLAS, {
+      frame: Frames.Spark,
       speed: { min: 30, max: 80 },
       lifespan: { min: 120, max: 260 },
       scale: { start: 0.45, end: 0 },
@@ -133,7 +127,8 @@ export class ArenaScene extends Phaser.Scene {
       angle: { min: 80, max: 100 }, // downward plume
       emitting: false,
     });
-    this.deathEmitter = this.add.particles(0, 0, TextureKeys.Spark, {
+    this.deathEmitter = this.add.particles(0, 0, ATLAS, {
+      frame: Frames.Spark,
       speed: { min: 50, max: 220 },
       lifespan: { min: 300, max: 700 },
       scale: { start: 0.9, end: 0 },
@@ -170,33 +165,41 @@ export class ArenaScene extends Phaser.Scene {
     return Math.atan2(pointer.worldY - py, pointer.worldX - px);
   }
 
+  /**
+   * A player's canvas-pixel position. Derived from the camera's visible world
+   * rect so it stays correct under zoom, scroll, and bounds clamping.
+   */
+  worldToScreen(player: number): { x: number; y: number } {
+    const view = this.cameras.main.worldView;
+    const wx = (this.world.players.posX[player] ?? 0) * PX_PER_M;
+    const wy = (this.world.players.posY[player] ?? 0) * PX_PER_M;
+    return {
+      x: ((wx - view.x) / view.width) * this.scale.width,
+      y: ((wy - view.y) / view.height) * this.scale.height,
+    };
+  }
+
   renderFrame(interp: RenderInterpolator, alpha: number, deltaMs: number): void {
     const world = this.world;
     const p = world.players;
 
     for (let i = 0; i < MAX_PLAYERS; i++) {
-      const body = this.playerBodies[i];
-      const barrel = this.playerBarrels[i];
-      if (body === undefined || barrel === undefined) continue;
+      const rig = this.rigs[i];
+      if (rig === undefined) continue;
       if (interp.playerVisible[i] !== 1) {
-        body.setVisible(false);
-        barrel.setVisible(false);
+        rig.setVisible(false);
         continue;
       }
       const x = interp.playerX(i, alpha) * PX_PER_M;
       const y = interp.playerY(i, alpha) * PX_PER_M;
       const aim = interp.playerAim(i, alpha);
-      const facingLeft = Math.abs(aim) > Math.PI / 2;
 
-      body.setPosition(x, y).setVisible(true).setFlipX(facingLeft);
-      barrel
-        .setPosition(x, y - 4)
-        .setRotation(aim)
-        .setFlipY(facingLeft)
-        .setVisible(true);
+      rig.setVisible(true);
+      rig.setActiveWeapon((p.weapons[i * WEAPON_SLOTS + (p.weaponSlot[i] ?? 0)] ?? 0) as WeaponId);
+      rig.update(deltaMs / 1000, x, y, aim, p.velX[i] ?? 0, p.grounded[i] === 1);
 
       // Spawn protection shimmer.
-      body.setAlpha((p.protect[i] ?? 0) > 0 ? 0.55 + 0.3 * Math.sin(this.time.now / 60) : 1);
+      rig.setAlpha((p.protect[i] ?? 0) > 0 ? 0.55 + 0.3 * Math.sin(this.time.now / 60) : 1);
     }
 
     this.renderProjectiles(interp, alpha);
@@ -214,12 +217,12 @@ export class ArenaScene extends Phaser.Scene {
         continue;
       }
       const isGrenade = (pr.kind[i] as ProjectileKind) === ProjectileKind.FragGrenade;
-      const texture = isGrenade ? TextureKeys.Grenade : TextureKeys.Rocket;
+      const frame = isGrenade ? Frames.Grenade : Frames.Rocket;
       if (sprite === undefined) {
-        sprite = this.add.sprite(0, 0, texture);
+        sprite = this.add.sprite(0, 0, ATLAS, frame);
         this.projectileSprites.set(i, sprite);
-      } else if (sprite.texture.key !== texture) {
-        sprite.setTexture(texture);
+      } else if (sprite.frame.name !== frame) {
+        sprite.setFrame(frame);
       }
       const x = interp.projX(i, alpha) * PX_PER_M;
       const y = interp.projY(i, alpha) * PX_PER_M;
@@ -290,8 +293,10 @@ export class ArenaScene extends Phaser.Scene {
       // Hover (thrust + down input, ADR-011) idles the jets at half density.
       const hovering = cmd.moveY > 0.5 && p.grounded[i] !== 1;
       if (hovering && world.tick % 2 === 0) continue;
-      const x = (p.posX[i] ?? 0) * PX_PER_M;
-      const y = (p.posY[i] ?? 0) * PX_PER_M + (TUNING.player.height / 2) * PX_PER_M - 4;
+      // Plume leaves the jetpack nozzles, which sit behind the facing direction.
+      const facingLeft = Math.abs(p.aim[i] ?? 0) > Math.PI / 2;
+      const x = (p.posX[i] ?? 0) * PX_PER_M + (facingLeft ? 8 : -8);
+      const y = (p.posY[i] ?? 0) * PX_PER_M + 4;
       this.jetEmitter.emitParticleAt(x, y, 1);
     }
   }
@@ -304,7 +309,7 @@ export class ArenaScene extends Phaser.Scene {
           const aim = world.players.aim[ev.a] ?? 0;
           const mx = (ev.x + Math.cos(aim) * 0.75) * PX_PER_M;
           const my = (ev.y + Math.sin(aim) * 0.75) * PX_PER_M;
-          const flash = this.add.image(mx, my, TextureKeys.Muzzle).setDepth(9);
+          const flash = this.add.image(mx, my, ATLAS, Frames.Muzzle).setDepth(9);
           this.tweens.add({
             targets: flash,
             alpha: 0,
@@ -334,6 +339,11 @@ export class ArenaScene extends Phaser.Scene {
         }
         case SimEventType.Death: {
           this.deathEmitter.explode(22, ev.x * PX_PER_M, ev.y * PX_PER_M);
+          this.spawnDeathDebris(
+            ev.x * PX_PER_M,
+            ev.y * PX_PER_M,
+            PLAYER_COLORS[ev.a % PLAYER_COLORS.length] ?? 0xffffff,
+          );
           break;
         }
         case SimEventType.GrenadeBounce: {
@@ -344,6 +354,31 @@ export class ArenaScene extends Phaser.Scene {
           break;
       }
     });
+  }
+
+  /**
+   * A short-lived tumble of armor pieces where a soldier fell. Allocates a
+   * handful of sprites, but only on the (rare) death event — they self-destroy.
+   */
+  private spawnDeathDebris(x: number, y: number, tint: number): void {
+    const parts = [Frames.Head, Frames.Leg, Frames.Leg, Frames.Arm];
+    for (const frameName of parts) {
+      const piece = this.add.sprite(x, y, ATLAS, frameName).setScale(RIG_SCALE).setDepth(6);
+      if (frameName === Frames.Head) piece.setTint(tint);
+      const driftX = Phaser.Math.Between(-70, 70);
+      const rise = Phaser.Math.Between(30, 90);
+      this.tweens.add({
+        targets: piece,
+        x: x + driftX,
+        y: { value: y - rise + 130, ease: 'Quad.easeIn' }, // pops up, then falls
+        angle: Phaser.Math.Between(-300, 300),
+        alpha: 0,
+        duration: Phaser.Math.Between(550, 800),
+        onComplete: () => {
+          piece.destroy();
+        },
+      });
+    }
   }
 
   /** Screenshake scaled by explosion proximity to the local player. */

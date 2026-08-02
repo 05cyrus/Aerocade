@@ -100,11 +100,11 @@ sim, touching only entities whose `alive` flag is set.
 Sim pools are fixed-capacity (players ×8, projectiles ×256, pickups ×64). The renderer
 allocates matching sprite pools **once** in `ArenaScene.create` and never afterwards:
 
-| Sim pool         | Render pool                                          | Sync rule                                               |
-| ---------------- | ---------------------------------------------------- | ------------------------------------------------------- |
-| players ×8       | 8 player rigs (body + jetpack flame + weapon sprite) | index _i_ sim ↔ index _i_ sprite                        |
-| projectiles ×256 | 256 sprites                                          | texture swapped by weapon kind on activation            |
-| pickups ×64      | 64 sprites                                           | bob/pulse tween driven by render clock, position by sim |
+| Sim pool         | Render pool                                    | Sync rule                                               |
+| ---------------- | ---------------------------------------------- | ------------------------------------------------------- |
+| players ×8       | 8 articulated rigs (7 sprites each, see below) | index _i_ sim ↔ index _i_ rig                           |
+| projectiles ×256 | 256 sprites                                    | atlas frame swapped by projectile kind on activation    |
+| pickups ×64      | 64 sprites                                     | bob/pulse tween driven by render clock, position by sim |
 
 Sync per frame: if `alive[i]` and sprite hidden → activate (`setVisible(true)`, assign
 texture); if dead and visible → deactivate. Active sprites get position/rotation/flip written
@@ -112,10 +112,29 @@ from interpolated state. There is no create/destroy, no dynamic display-list chu
 lookup maps — index identity between sim and render pools makes the sync branch-cheap and
 allocation-free.
 
-Player rigs are small `Container`s (torso, held weapon, jetpack nozzle) so aim rotation and
-sprite flip compose without per-frame trigonometry beyond the aim angle already in sim state.
-Spawn-protection (2.5 s) renders as an alpha pulse on the rig; reload and low-fuel states are
-HUD concerns, not sprite concerns.
+### The player rig
+
+Each player is an articulated soldier (`PlayerRig`), not a single sprite: a helmeted head, an
+armored torso, a jetpack, two legs, an arm, and the held weapon — seven sprites in one flat
+`Container`. Facing is the container's `scaleX = ±1`; because a mirrored container renders a
+rotation `r` as `π − r` (y-down), the arm pre-mirrors the aim to `π − aim` when facing left.
+
+The rig is **pure presentation**. It reads interpolated position/aim plus three sim facts
+(`velX`, `grounded`, active weapon) and owns only cosmetic state — a run phase. Nothing it
+computes feeds back into the simulation.
+
+| State    | Pose                                                                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Idle     | legs slightly splayed, torso upright                                                                                                                                         |
+| Running  | legs counter-swing on a `sin(runPhase)` cycle advanced by **distance moved**, so the stride matches ground speed at any frame rate; torso leans into travel; upper body bobs |
+| Airborne | legs settle into a trailing pose; jetpack plume emits from the pack nozzles                                                                                                  |
+
+Poses blend toward their target each frame (`POSE_EASE`) so transitions never snap. The arm and
+gun are positioned with explicit trigonometry rather than a nested container — one less
+container per player on the display list.
+
+Spawn protection (2.5 s) renders as an alpha pulse on the whole rig; death spawns a short
+tumble of armor pieces. Reload and low-fuel states are HUD concerns, not sprite concerns.
 
 ## Procedural textures — zero external assets
 
@@ -127,20 +146,32 @@ to resemble anything — and keeps the PWA precache tiny ([ADR-007](DECISIONS.md
 
 Generation strategy per family:
 
-| Family               | Technique                                                                                 |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| Tileset (Foundry)    | 1 m tiles: base fill + edge bevel gradient + seeded rivet/scratch detail                  |
-| Player bodies        | rounded capsule silhouette (0.85 × 1.65 m AABB proportions), team-tintable greyscale base |
-| Weapons              | layered rects/polys per weapon def; one texture per roster entry, keyed by weapon id      |
-| Projectiles          | radial-gradient bolts, rocket/grenade silhouettes with emissive rim                       |
-| Particles            | soft radial discs (smoke, flash, spark) at 3 sizes                                        |
-| Background layers    | large low-frequency gradient + silhouette shapes, one texture per parallax layer          |
-| UI icons / PWA icons | same pipeline, exported to the manifest at build time                                     |
+| Family               | Technique                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Tileset (Foundry)    | 1 m tiles: base fill + edge bevel gradient + walkable-edge highlight                 |
+| Character parts      | head / torso / leg / arm / jetpack, drawn facing right on a near-white tintable base |
+| Weapons              | layered rects/polys per weapon def; one frame per roster entry, keyed by weapon id   |
+| Projectiles          | rocket and grenade silhouettes with emissive caps                                    |
+| Particles            | soft radial discs (spark, muzzle flash) built from concentric alpha rings            |
+| Background layers    | large low-frequency gradient + silhouette shapes, one frame per parallax layer       |
+| UI icons / PWA icons | same pipeline, exported to the manifest at build time                                |
 
-Textures are generated once at a fixed authoring resolution, registered as
-`Phaser.Textures.CanvasTexture`, and never regenerated mid-match. Team/player coloring uses
-Phaser tint on greyscale bases instead of per-color texture variants, keeping texture count —
-and batch breaks — low.
+### One atlas, not many textures — a hard requirement
+
+Every frame above is packed into a **single** runtime atlas texture (`ATLAS`), shelf-packed with
+a 2 px gutter, baked once with `generateTexture`, then carved into named frames via
+`texture.add()`. Character parts are authored at 2× and drawn at `RIG_SCALE` for clean edges.
+
+This is a performance contract, not tidiness. Sprites drawn from different textures force a
+WebGL batch flush apiece, and the rig is seven sprites per player across eight players. When the
+rig first shipped with one texture per body part it measured **~3.5× the frame time** of the
+capsule it replaced on the software rasterizer; folding every part — tiles included — into one
+atlas erased the regression entirely and left the rig marginally _cheaper_ than the capsule,
+because tiles and characters now batch together. Any new art must join the atlas.
+
+Textures are generated once at a fixed authoring resolution and never regenerated mid-match.
+Team coloring uses Phaser tint on the near-white bases instead of per-color texture variants,
+keeping frame count — and batch breaks — low.
 
 ## Camera model
 

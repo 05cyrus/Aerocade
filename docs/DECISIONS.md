@@ -132,6 +132,30 @@ airborne. The jetpack cancels gravity and brakes vertical speed toward zero at
 deterministic, and an intentional skill action. Supersedes the hover wording in ADR-008-era
 docs; docs/physics.md and docs/ui.md follow this ADR.
 
+## ADR-012: Articulated character rig, drawn from a single atlas
+
+Players were a single capsule sprite with a barrel stub. That reads as a placeholder, and the
+game's feel depends on seeing what an opponent is doing — which way they face, whether they are
+sprinting or hovering, what they are holding.
+
+**Decision:** each player is an articulated rig (`PlayerRig`) — helmeted head, armored torso,
+jetpack, two legs, arm, and the held weapon, with a distance-driven run cycle, torso lean,
+airborne pose, and aim-tracking arm. All art stays procedurally generated (ADR-001 originality),
+and the design is an original chibi-soldier, not a copy of any existing game's character.
+
+**Consequence, learned by measuring:** the first implementation gave every body part its own
+texture, which cost **~3.5× the frame time** of the capsule (measured A/B on production builds
+against the previous commit) because each distinct texture forces a WebGL batch flush. Packing
+every frame — character parts, weapons, projectiles, particles, _and_ tiles — into one runtime
+atlas removed the regression and left the rig slightly faster than the capsule it replaced.
+
+**Rule going forward:** all new art joins the single atlas. `docs/rendering.md` states this as a
+performance contract; treat one-texture-per-thing as a defect, not a style choice.
+
+A dev-only `window.__aeroDebug` hook plus `packages/client/scripts/screenshot-sandbox.mjs`
+(headless Chromium) exist to eyeball renderer changes and to A/B render cost; the hook is
+stripped from production builds by `import.meta.env.DEV`.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

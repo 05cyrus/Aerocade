@@ -21,11 +21,27 @@ import { ArenaScene, type SceneDriver } from './render/ArenaScene.js';
 import { RenderInterpolator } from './render/RenderInterpolator.js';
 
 /** Never simulate more than this many ticks per frame (tab-restore spiral guard). */
-const MAX_CATCHUP_TICKS = 5;
+const MAX_CATCHUP_TICKS = 8;
 /** HUD refresh cadence in sim ticks (10 Hz). */
 const HUD_EVERY_TICKS = 6;
 
 const DUMMY_NAMES = ['Bolt Dummy', 'Rivet Dummy'];
+
+/** Dev-only inspection surface used by the screenshot/e2e harness. */
+export interface AeroDebug {
+  world: SimWorld;
+  localPlayer: number;
+  /** Local player's position in canvas pixels, for framing screenshots. */
+  screenPos: () => { x: number; y: number } | null;
+  fps: () => number;
+}
+
+declare global {
+  interface Window {
+    /** Dev-only handle for automated smoke tests (never set in production builds). */
+    __aeroDebug?: AeroDebug;
+  }
+}
 
 /**
  * A local sandbox match: the full deterministic sim, the local player, and
@@ -42,6 +58,7 @@ export class GameSession implements SceneDriver {
   private scene: ArenaScene | null = null;
   private accumulator = 0;
   private lastAim = 0;
+  private lastFrameAt = 0;
   private destroyed = false;
 
   constructor(parent: HTMLElement) {
@@ -53,6 +70,14 @@ export class GameSession implements SceneDriver {
     this.dummies.push(addPlayer(this.world), addPlayer(this.world));
 
     this.input.attach();
+    if (import.meta.env.DEV) {
+      window.__aeroDebug = {
+        world: this.world,
+        localPlayer: this.localPlayer,
+        screenPos: () => this.scene?.worldToScreen(this.localPlayer) ?? null,
+        fps: () => this.game?.loop.actualFps ?? 0,
+      };
+    }
     const scene = new ArenaScene(this, this.world, this.localPlayer);
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
@@ -75,8 +100,15 @@ export class GameSession implements SceneDriver {
     this.publishHud(); // the HUD must show this match from the first frame
   }
 
-  onFrame(deltaMs: number): void {
+  onFrame(_phaserDeltaMs: number): void {
     if (this.destroyed || this.scene === null) return;
+
+    // Measure real elapsed time ourselves: Phaser's delta is smoothed, and
+    // under heavy render jank it under-reports — which would silently run
+    // the simulation slower than wall-clock time.
+    const now = performance.now();
+    const deltaMs = this.lastFrameAt === 0 ? SIM_DT * 1000 : now - this.lastFrameAt;
+    this.lastFrameAt = now;
 
     this.accumulator += Math.min(deltaMs, 250) / 1000;
     let steps = 0;
@@ -182,6 +214,7 @@ export class GameSession implements SceneDriver {
 
   destroy(): void {
     this.destroyed = true;
+    if (window.__aeroDebug?.world === this.world) delete window.__aeroDebug;
     this.input.detach();
     this.game?.destroy(true);
     this.game = null;

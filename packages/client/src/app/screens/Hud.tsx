@@ -1,9 +1,14 @@
 import type { ReactElement } from 'react';
 import { appStore, useAppState } from '../store.js';
 
-/** Trim a zoom factor to at most one decimal: 1 → "1", 2.3 → "2.3". */
+/**
+ * Print a zoom factor exactly: 1 → "1", 2.3 → "2.3", 1.65 → "1.65".
+ * Rounding to one decimal would misreport the roster — toFixed(1) turns the
+ * Rivet Pistol's 1.25 into "1.3" and the Thumper's 1.65 into "1.6" (the
+ * nearest double to 1.65 is just below it, so it rounds down).
+ */
 function formatZoom(zoom: number): string {
-  return Number.isInteger(zoom) ? String(zoom) : zoom.toFixed(1);
+  return String(Math.round(zoom * 100) / 100);
 }
 
 export function Hud(): ReactElement {
@@ -53,8 +58,9 @@ export function Hud(): ReactElement {
             )}
           </div>
         </div>
-        <div className="weapon-panel-grenades" title="Grenades">
-          <span className="pip" aria-hidden="true" />×{hud.grenades}
+        <div className="weapon-panel-grenades" aria-label={`${String(hud.grenades)} grenades`}>
+          <span className="pip" aria-hidden="true" />
+          <span aria-hidden="true">×{hud.grenades}</span>
         </div>
       </div>
 

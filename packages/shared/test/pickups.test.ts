@@ -9,6 +9,7 @@ import {
   WEAPON_SLOTS,
   createFoundryMap,
   createMatch,
+  findPickupUnderPlayer,
   parseAsciiMap,
   weaponDef,
   WeaponId,
@@ -417,26 +418,6 @@ describe('death drops equipment', () => {
 });
 
 describe('grenades are picked up automatically when you have none', () => {
-  /** Drop a grenade bundle at a known clear spot and let it arm. */
-  function bundleAt(world: SimWorld, owner: number, x: number, y: number): number {
-    world.players.grenades[owner] = 2;
-    world.players.protect[owner] = 0;
-    world.players.health[owner] = 1;
-    world.damage.push(owner, 50, owner, 0, 0);
-    damageSystem(world);
-    run(world, Math.ceil(TUNING.pickups.dropArmDelay / SIM_DT) + 20);
-
-    let bundle = -1;
-    for (let i = 0; i < world.pickups.alive.length; i++) {
-      if (world.pickups.alive[i] === 1 && world.pickups.kind[i] === PickupKind.Grenades) bundle = i;
-    }
-    if (bundle === -1) throw new Error('no bundle');
-    // Park it clear of the pad gun and the other drops.
-    world.pickups.posX[bundle] = x;
-    world.pickups.posY[bundle] = y;
-    return bundle;
-  }
-
   it('walks them up with no input at all', () => {
     const world = padRoom();
     const owner = addCombatant(world);
@@ -524,6 +505,78 @@ describe('grenades are picked up automatically when you have none', () => {
     stage(world, p, {});
     run(world, 60);
     expect(padStocked(world, 0)).toBe(true);
+  });
+});
+
+/** Drop a grenade bundle at a known clear spot and let it arm. */
+function bundleAt(world: SimWorld, owner: number, x: number, y: number): number {
+  world.players.grenades[owner] = 2;
+  world.players.protect[owner] = 0;
+  world.players.health[owner] = 1;
+  world.damage.push(owner, 50, owner, 0, 0);
+  damageSystem(world);
+  run(world, Math.ceil(TUNING.pickups.dropArmDelay / SIM_DT) + 20);
+
+  let bundle = -1;
+  for (let i = 0; i < world.pickups.alive.length; i++) {
+    if (world.pickups.alive[i] === 1 && world.pickups.kind[i] === PickupKind.Grenades) bundle = i;
+  }
+  if (bundle === -1) throw new Error('no bundle');
+  // Park it clear of the pad gun and the other drops.
+  world.pickups.posX[bundle] = x;
+  world.pickups.posY[bundle] = y;
+  return bundle;
+}
+
+describe('grenades never mask a weapon underneath', () => {
+  it('a gun under a grenade stack is still prompted and collectable', () => {
+    const world = padRoom();
+    const owner = addCombatant(world);
+    const a = addCombatant(world);
+    run(world, 5);
+    const pad = world.map.weaponPads[0];
+    if (pad === undefined) throw new Error('no pad');
+
+    // Drop a bundle directly on top of the pad's gun.
+    const bundle = bundleAt(world, owner, pad.x, pad.y);
+    world.pickups.mag[bundle] = 2;
+    world.players.grenades[a] = TUNING.player.maxGrenades; // full: cannot use it
+
+    teleport(world, a, pad.x, pad.y);
+    // The prompt skips the grenades and offers the gun.
+    const prompted = findPickupUnderPlayer(world, a);
+    expect(prompted).toBeGreaterThanOrEqual(0);
+    expect(world.pickups.kind[prompted]).toBe(PickupKind.Weapon);
+
+    const before = world.players.weapons[a * WEAPON_SLOTS + (world.players.weaponSlot[a] ?? 0)];
+    stage(world, a, { buttons: Buttons.Interact });
+    run(world, 1);
+    const after = world.players.weapons[a * WEAPON_SLOTS + (world.players.weaponSlot[a] ?? 0)];
+    expect(after).not.toBe(before); // the press reached the gun, not the grenades
+    expect(world.pickups.mag[bundle]).toBe(2); // stack untouched by a full player
+  });
+
+  it('topping up grenades does not consume the press meant for a gun', () => {
+    const world = padRoom();
+    const owner = addCombatant(world);
+    const a = addCombatant(world);
+    run(world, 5);
+    const pad = world.map.weaponPads[0];
+    if (pad === undefined) throw new Error('no pad');
+    const bundle = bundleAt(world, owner, pad.x, pad.y);
+    world.pickups.mag[bundle] = 2;
+    world.players.grenades[a] = 0; // will auto-collect this tick
+
+    teleport(world, a, pad.x, pad.y);
+    const before = world.players.weapons[a * WEAPON_SLOTS + (world.players.weaponSlot[a] ?? 0)];
+    stage(world, a, { buttons: Buttons.Interact });
+    run(world, 1);
+
+    // Both happened in the same tick: grenades gathered AND the gun swapped.
+    expect(world.players.grenades[a]).toBe(2);
+    expect(world.players.weapons[a * WEAPON_SLOTS + (world.players.weaponSlot[a] ?? 0)]).not.toBe(
+      before,
+    );
   });
 });
 

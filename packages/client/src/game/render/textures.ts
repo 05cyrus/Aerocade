@@ -71,6 +71,12 @@ export const Frames = {
  */
 export function frameDataUrl(scene: Phaser.Scene, frameName: string, scale = 2): string {
   const texture = scene.textures.get(ATLAS);
+  if (!texture.has(frameName)) {
+    // Phaser hands back the __BASE frame for an unknown name, which would
+    // render the entire atlas as the icon. Fail visibly instead.
+    console.error(`atlas frame "${frameName}" is missing`);
+    return '';
+  }
   const frame = texture.get(frameName);
   const source = texture.getSourceImage();
   const canvas = document.createElement('canvas');

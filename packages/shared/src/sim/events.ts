@@ -44,8 +44,11 @@ export type SimEventType = (typeof SimEventType)[keyof typeof SimEventType];
  * - GrenadeThrow:  a=player, x/y=throw origin
  * - Trace:         a=shooter, b=weaponId, x/y=pellet path endpoint
  * - PickupSpawn:   a=padIndex, b=weaponId, x/y=pad position
- * - PickupTaken:   a=player, b=weaponId (-1 for grenades), x/y=item position,
- *                  r=1 when it merged into what the player already carried
+ * - PickupTaken:   a=player, b=weaponId (-1 for grenades), x/y=item position.
+ *                  r means different things per kind: for a weapon it is 1
+ *                  when the ammo merged into a gun already carried, 0 on a
+ *                  swap; for grenades it is the NUMBER taken, which may be
+ *                  fewer than the stack held (partial pickup, ADR-016).
  * - PickupDropped: a=player who dropped it, b=weaponId (-1 for grenades),
  *                  x/y=drop origin
  */

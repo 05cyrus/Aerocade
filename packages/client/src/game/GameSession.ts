@@ -10,7 +10,6 @@ import {
   createFoundryMap,
   createMatch,
   findPickupUnderPlayer,
-  PickupKind,
   setInput,
   stepWorld,
   weaponDef,
@@ -223,13 +222,9 @@ export class GameSession implements SceneDriver {
       appStore.setPrompt(null);
       return;
     }
-    const pk = this.world.pickups;
-    if ((pk.kind[slot] as PickupKind) === PickupKind.Grenades) {
-      const count = pk.mag[slot] ?? 0;
-      appStore.setPrompt({ weaponId: -1, weaponName: `Grenades ×${String(count)}` });
-      return;
-    }
-    const weaponId = (pk.weapon[slot] ?? 0) as WeaponId;
+    // Only weapons reach here: grenades are gathered automatically, so
+    // findPickupUnderPlayer never returns one (ADR-016).
+    const weaponId = (this.world.pickups.weapon[slot] ?? 0) as WeaponId;
     appStore.setPrompt({ weaponId, weaponName: weaponDef(weaponId).name });
   }
 

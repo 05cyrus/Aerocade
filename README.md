@@ -22,10 +22,12 @@ Honest status per milestone (full plan in [docs/roadmap.md](docs/roadmap.md)):
 | Local sandbox: run/jump/jetpack (with hover), aim, shoot, damage, respawn | M1        | Done                                                                                                     |
 | Articulated soldier rig with run cycle and per-weapon held guns           | M1        | Done                                                                                                     |
 | First map: **Foundry** (48×27 tile arena) + HUD                           | M1        | Done                                                                                                     |
+| **Outpost Delta** (175×98 arena: bunker, mountains, tunnels, 6 spawns)    | M6        | Done                                                                                                     |
+| Ladders, one-way platforms, health/ammo/grenade pickups                   | M3        | Done                                                                                                     |
 | LAN bridge: static hosting, rooms, WebRTC signaling, WS relay fallback    | M2        | Partial — bridge done; browser transport next                                                            |
 | Client prediction, reconciliation, snapshot interpolation, Playwright e2e | M2        | Planned                                                                                                  |
 | Weapon pads: fixed spots, random guns, timed respawn                      | M3        | Done                                                                                                     |
-| Full roster + lag compensation                                            | M3        | Partial — 7 weapons, grenades, melee done; Arclight Beam, Emberjet, health/ammo pads and lag comp remain |
+| Full roster + lag compensation                                            | M3        | Partial — 7 weapons, grenades, melee, health/ammo pads done; Arclight Beam, Emberjet and lag comp remain |
 | Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen    | M4        | Planned                                                                                                  |
 | Mobile twin-stick controls, Gamepad API, settings, generated audio        | M5        | Planned                                                                                                  |
 | PWA polish, more maps, moving platforms/jump pads, perf hardening         | M6        | Planned                                                                                                  |
@@ -159,6 +161,7 @@ Offline capabilities, precisely:
 | `Q`                       | Switch primary ↔ secondary (or tap the weapon panel, top centre)            |
 | `E`                       | Take the weapon off the pad you're standing on (or tap the circular button) |
 | `Z`                       | Toggle the weapon scope (or tap the reticle button, top right)              |
+| `W` / `S`                 | Climb a ladder up / down (jump to let go)                                   |
 | `Tab`                     | Scoreboard (planned, M4)                                                    |
 | `Esc`                     | Pause (planned, M5)                                                         |
 

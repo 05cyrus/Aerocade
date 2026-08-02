@@ -1,15 +1,14 @@
 import {
+  MAX_PICKUP_PADS,
   MAX_PICKUPS,
   MAX_PLAYERS,
-  MAX_WEAPON_PADS,
   SIM_DT,
   WEAPON_SLOTS,
 } from '../../constants.js';
 import { SimEventType } from '../events.js';
 import { Buttons } from '../input.js';
 import { WEAPON_COUNT, weaponDef, type WeaponId } from '../combat/weapon-defs.js';
-import { isSolid } from '../map/mapdef.js';
-import type { SpawnPoint } from '../map/mapdef.js';
+import { isSolid, PadKind, type PickupPad } from '../map/mapdef.js';
 import { TUNING } from '../tuning.js';
 import { PickupKind, type SimWorld } from '../world.js';
 
@@ -37,8 +36,8 @@ export function pickupsSystem(world: SimWorld): void {
 // ---------- pads ----------
 
 function advancePads(world: SimWorld): void {
-  const pads = world.map.weaponPads;
-  const count = Math.min(pads.length, MAX_WEAPON_PADS);
+  const pads = world.map.pads;
+  const count = Math.min(pads.length, MAX_PICKUP_PADS);
   const padPool = world.pads;
 
   for (let i = 0; i < count; i++) {
@@ -49,7 +48,7 @@ function advancePads(world: SimWorld): void {
     const owned = padPool.pickup[i] ?? -1;
     if (owned >= 0 && world.pickups.alive[owned] !== 1) {
       padPool.pickup[i] = -1;
-      if ((padPool.timer[i] ?? 0) <= 0) padPool.timer[i] = TUNING.pickups.weaponRespawnDelay;
+      if ((padPool.timer[i] ?? 0) <= 0) padPool.timer[i] = padRespawnDelay(pad.kind);
     }
     if ((padPool.pickup[i] ?? -1) >= 0) continue;
 
@@ -59,45 +58,93 @@ function advancePads(world: SimWorld): void {
   }
 }
 
+/** How long a pad of each kind stays empty after being looted. */
+function padRespawnDelay(kind: PadKind): number {
+  const t = TUNING.pickups;
+  switch (kind) {
+    case PadKind.Health:
+      return t.healthRespawnDelay;
+    case PadKind.Ammo:
+      return t.ammoRespawnDelay;
+    case PadKind.Grenade:
+      return t.grenadeRespawnDelay;
+    case PadKind.Weapon:
+    default:
+      return t.weaponRespawnDelay;
+  }
+}
+
 /**
- * Put a freshly rolled weapon on a pad, fully loaded. A pad never offers the
- * same gun twice running, so a looted pad is always worth returning to; on a
- * repeat we shift by a second draw rather than looping, keeping the number of
- * RNG draws per refill fixed and replays cheap.
+ * Stock a pad with whatever it dispenses. Weapon pads roll a random gun and
+ * never offer the same one twice running, so a looted pad is always worth
+ * returning to; on a repeat we shift by a second draw rather than looping,
+ * keeping the number of RNG draws per refill fixed and replays cheap.
  */
 export function refillPad(
   world: SimWorld,
   padIndex: number,
-  pad: SpawnPoint,
+  pad: PickupPad,
   emitEvent: boolean,
 ): void {
-  const previous = lastWeaponOnPad(world, padIndex);
-  let rolled = world.rng.int(WEAPON_COUNT);
-  if (rolled === previous) {
-    rolled = (rolled + 1 + world.rng.int(WEAPON_COUNT - 1)) % WEAPON_COUNT;
+  const t = TUNING.pickups;
+  let request: SpawnRequest;
+
+  if (pad.kind === PadKind.Weapon) {
+    const previous = lastWeaponOnPad(world, padIndex);
+    let rolled = world.rng.int(WEAPON_COUNT);
+    if (rolled === previous) {
+      rolled = (rolled + 1 + world.rng.int(WEAPON_COUNT - 1)) % WEAPON_COUNT;
+    }
+    const def = weaponDef(rolled as WeaponId);
+    request = {
+      kind: PickupKind.Weapon,
+      weapon: rolled,
+      mag: def.magSize,
+      reserve: def.reserveMax,
+      x: pad.x,
+      y: pad.y,
+      velX: 0,
+      velY: 0,
+      padIndex,
+      ttl: 0,
+      arm: 0,
+    };
+  } else {
+    const kind =
+      pad.kind === PadKind.Health
+        ? PickupKind.Health
+        : pad.kind === PadKind.Ammo
+          ? PickupKind.Ammo
+          : PickupKind.Grenades;
+    const amount =
+      pad.kind === PadKind.Health
+        ? t.healthAmount
+        : pad.kind === PadKind.Ammo
+          ? 0
+          : t.grenadeAmount;
+    request = {
+      kind,
+      weapon: 0,
+      mag: amount,
+      reserve: 0,
+      x: pad.x,
+      y: pad.y,
+      velX: 0,
+      velY: 0,
+      padIndex,
+      ttl: 0,
+      arm: 0,
+    };
   }
 
-  const def = weaponDef(rolled as WeaponId);
-  const slot = spawnPickup(world, {
-    kind: PickupKind.Weapon,
-    weapon: rolled,
-    mag: def.magSize,
-    reserve: def.reserveMax,
-    x: pad.x,
-    y: pad.y,
-    velX: 0,
-    velY: 0,
-    padIndex,
-    ttl: 0,
-    arm: 0,
-  });
+  const slot = spawnPickup(world, request);
   if (slot === -1) return;
 
   world.pads.pickup[padIndex] = slot;
   world.pads.timer[padIndex] = 0;
-  world.pickups.grounded[slot] = 1; // pad guns hover in place, no drop arc
+  world.pickups.grounded[slot] = 1; // pad contents hover in place, no drop arc
   if (emitEvent) {
-    world.events.emit(SimEventType.PickupSpawn, padIndex, rolled, pad.x, pad.y);
+    world.events.emit(SimEventType.PickupSpawn, padIndex, request.weapon, pad.x, pad.y);
   }
 }
 
@@ -109,8 +156,8 @@ function lastWeaponOnPad(world: SimWorld, padIndex: number): number {
 
 /** Stock every pad at match start so the arena is never empty. */
 export function initPickups(world: SimWorld): void {
-  const pads = world.map.weaponPads;
-  const count = Math.min(pads.length, MAX_WEAPON_PADS);
+  const pads = world.map.pads;
+  const count = Math.min(pads.length, MAX_PICKUP_PADS);
   for (let i = 0; i < count; i++) {
     const pad = pads[i];
     if (pad !== undefined) refillPad(world, i, pad, false);
@@ -187,7 +234,8 @@ function releaseSlot(world: SimWorld, slot: number): void {
     world.pads.lastWeapon[pad] = pk.weapon[slot] ?? -1;
     world.pads.pickup[pad] = -1;
     if ((world.pads.timer[pad] ?? 0) <= 0) {
-      world.pads.timer[pad] = TUNING.pickups.weaponRespawnDelay;
+      const kind = world.map.pads[pad]?.kind ?? PadKind.Weapon;
+      world.pads.timer[pad] = padRespawnDelay(kind);
     }
   }
   pk.alive[slot] = 0;
@@ -263,7 +311,7 @@ function resolveCollections(world: SimWorld): void {
     const taker = findCollector(world, i);
     if (taker === -1) continue;
 
-    const automatic = (pk.kind[i] as PickupKind) === PickupKind.Grenades;
+    const automatic = (pk.kind[i] as PickupKind) !== PickupKind.Weapon;
     if (!automatic) {
       if ((claimed & (1 << taker)) !== 0) continue;
       claimed |= 1 << taker;
@@ -295,21 +343,43 @@ export function playerReachesPickup(world: SimWorld, player: number, pickup: num
  */
 export function findPickupUnderPlayer(world: SimWorld, player: number): number {
   for (let i = 0; i < MAX_PICKUPS; i++) {
-    if ((world.pickups.kind[i] as PickupKind) === PickupKind.Grenades) continue;
+    // Only weapons need a press; consumables gather themselves.
+    if ((world.pickups.kind[i] as PickupKind) !== PickupKind.Weapon) continue;
     if (playerReachesPickup(world, player, i)) return i;
   }
   return -1;
 }
 
 /**
- * Grenades are gathered by walking over them, up to the carry cap — no button
- * (ADR-016). Weapons never auto-collect: swapping your gun must stay a
- * deliberate choice, but topping up grenades is never a decision worth a
- * keypress.
+ * Consumables are gathered by walking over them — no button (ADR-016).
+ * Weapons never auto-collect: swapping your gun must stay a deliberate
+ * choice, but topping up health, ammo or grenades is never a decision worth
+ * a keypress. Each only triggers when the player can actually use it, so a
+ * full player leaves the box for a teammate.
  */
 function autoCollects(world: SimWorld, player: number, pickup: number): boolean {
-  if ((world.pickups.kind[pickup] as PickupKind) !== PickupKind.Grenades) return false;
-  return (world.players.grenades[player] ?? 0) < TUNING.player.maxGrenades;
+  const p = world.players;
+  switch (world.pickups.kind[pickup] as PickupKind) {
+    case PickupKind.Grenades:
+      return (p.grenades[player] ?? 0) < TUNING.player.maxGrenades;
+    case PickupKind.Health:
+      return (p.health[player] ?? 0) < TUNING.player.maxHealth;
+    case PickupKind.Ammo:
+      return needsAmmo(world, player);
+    default:
+      return false;
+  }
+}
+
+/** True when any carried weapon has room in its reserve. */
+function needsAmmo(world: SimWorld, player: number): boolean {
+  const p = world.players;
+  for (let s = 0; s < WEAPON_SLOTS; s++) {
+    const idx = player * WEAPON_SLOTS + s;
+    const def = weaponDef((p.weapons[idx] ?? 0) as WeaponId);
+    if ((p.ammoReserve[idx] ?? 0) < def.reserveMax) return true;
+  }
+  return false;
 }
 
 /**
@@ -319,12 +389,12 @@ function autoCollects(world: SimWorld, player: number, pickup: number): boolean 
  */
 function findCollector(world: SimWorld, pickup: number): number {
   const p = world.players;
-  const isGrenades = (world.pickups.kind[pickup] as PickupKind) === PickupKind.Grenades;
+  const automatic = (world.pickups.kind[pickup] as PickupKind) !== PickupKind.Weapon;
 
   for (let t = 0; t < MAX_PLAYERS; t++) {
     if (!playerReachesPickup(world, t, pickup)) continue;
 
-    if (isGrenades) {
+    if (automatic) {
       // Automatic when there is room, and impossible when full — a press
       // never enters into it, so a player standing on a stack they cannot
       // use never has their press swallowed by it.
@@ -346,7 +416,40 @@ function collect(world: SimWorld, player: number, pickup: number): void {
   const x = pk.posX[pickup] ?? 0;
   const y = pk.posY[pickup] ?? 0;
 
-  if ((pk.kind[pickup] as PickupKind) === PickupKind.Grenades) {
+  const kind = pk.kind[pickup] as PickupKind;
+
+  if (kind === PickupKind.Health) {
+    const p = world.players;
+    const before = p.health[player] ?? 0;
+    const healed = Math.min(TUNING.player.maxHealth, before + (pk.mag[pickup] ?? 0));
+    if (healed <= before) return;
+    p.health[player] = healed;
+    releaseSlot(world, pickup);
+    world.events.emit(SimEventType.PickupTaken, player, -2, x, y, Math.round(healed - before));
+    return;
+  }
+
+  if (kind === PickupKind.Ammo) {
+    const p = world.players;
+    let restored = 0;
+    for (let s = 0; s < WEAPON_SLOTS; s++) {
+      const idx = player * WEAPON_SLOTS + s;
+      const def = weaponDef((p.weapons[idx] ?? 0) as WeaponId);
+      const have = p.ammoReserve[idx] ?? 0;
+      const topped = Math.min(
+        def.reserveMax,
+        have + Math.ceil(def.reserveMax * TUNING.pickups.ammoFraction),
+      );
+      restored += topped - have;
+      p.ammoReserve[idx] = topped;
+    }
+    if (restored <= 0) return;
+    releaseSlot(world, pickup);
+    world.events.emit(SimEventType.PickupTaken, player, -3, x, y, restored);
+    return;
+  }
+
+  if (kind === PickupKind.Grenades) {
     const p = world.players;
     const have = p.grenades[player] ?? 0;
     const room = TUNING.player.maxGrenades - have;

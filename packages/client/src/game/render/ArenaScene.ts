@@ -9,7 +9,6 @@ import {
   SimEventType,
   TUNING,
   WEAPON_SLOTS,
-  isSolid,
   type SimWorld,
   type WeaponId,
 } from '@aerocade/shared';
@@ -25,6 +24,7 @@ import {
   weaponFrame,
 } from './textures.js';
 import { PlayerRig } from './PlayerRig.js';
+import { TerrainView } from './TerrainView.js';
 import type { RenderInterpolator } from './RenderInterpolator.js';
 
 /** Target visible area in meters; zoom adapts the viewport to show this much. */
@@ -86,6 +86,7 @@ export class ArenaScene extends Phaser.Scene {
   private readonly world: SimWorld;
   private readonly localPlayer: number;
 
+  private terrain: TerrainView | null = null;
   private rigs: PlayerRig[] = [];
   private projectileSprites = new Map<number, Phaser.GameObjects.Sprite>();
   /** One disc per map weapon pad (static furniture). */
@@ -142,14 +143,10 @@ export class ArenaScene extends Phaser.Scene {
   // ---------- construction ----------
 
   private buildTiles(): void {
-    const map = this.world.map;
-    for (let ty = 0; ty < map.height; ty++) {
-      for (let tx = 0; tx < map.width; tx++) {
-        if (isSolid(map, tx, ty)) {
-          this.add.image(tx * PX_PER_M, ty * PX_PER_M, ATLAS, Frames.Tile).setOrigin(0, 0);
-        }
-      }
-    }
+    // Sized to the viewport, never to the map: Outpost Delta has 17k tiles and
+    // only a few hundred are ever on screen (see TerrainView).
+    const capacity = TerrainView.capacityFor(Math.ceil(VIEW_WIDTH_M), Math.ceil(VIEW_HEIGHT_M));
+    this.terrain = new TerrainView(this, this.world.map, capacity);
   }
 
   /**
@@ -159,7 +156,7 @@ export class ArenaScene extends Phaser.Scene {
    */
   private buildPickups(): void {
     // Pad discs are static map furniture — one per pad, positioned once.
-    for (const pad of this.world.map.weaponPads) {
+    for (const pad of this.world.map.pads) {
       this.padDiscs.push(
         this.add
           .sprite(pad.x * PX_PER_M, pad.y * PX_PER_M + PAD_DISC_OFFSET_PX, ATLAS, Frames.Pad)
@@ -339,6 +336,7 @@ export class ArenaScene extends Phaser.Scene {
     this.renderProjectiles(interp, alpha);
     this.renderOverlay(deltaMs);
     this.moveCamera(interp, alpha, deltaMs);
+    this.terrain?.update(this.cameras.main);
   }
 
   private hideHealthBar(player: number): void {
@@ -403,8 +401,7 @@ export class ArenaScene extends Phaser.Scene {
         sprite.setVisible(false);
         continue;
       }
-      const isGrenades = (pk.kind[i] as PickupKind) === PickupKind.Grenades;
-      const frame = isGrenades ? Frames.Grenade : weaponFrame((pk.weapon[i] ?? 0) as WeaponId);
+      const frame = pickupFrame(pk.kind[i] as PickupKind, (pk.weapon[i] ?? 0) as WeaponId);
       if (sprite.frame.name !== frame) sprite.setFrame(frame);
 
       const fromPad = (pk.padIndex[i] ?? -1) >= 0;
@@ -656,4 +653,18 @@ function healthTint(frac: number): number {
         100,
         Math.round(frac * 200),
       ).color;
+}
+
+/** Atlas frame for a ground item of a given kind. */
+function pickupFrame(kind: PickupKind, weapon: WeaponId): string {
+  switch (kind) {
+    case PickupKind.Grenades:
+      return Frames.Grenade;
+    case PickupKind.Health:
+      return Frames.HealthBox;
+    case PickupKind.Ammo:
+      return Frames.AmmoBox;
+    default:
+      return weaponFrame(weapon);
+  }
 }

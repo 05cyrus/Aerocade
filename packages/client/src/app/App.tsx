@@ -1,20 +1,21 @@
 import { useEffect, useRef, type ReactElement } from 'react';
+import type { MapId } from '@aerocade/shared';
 import { GameSession } from '../game/GameSession.js';
 import { Hud } from './screens/Hud.js';
 import { MainMenu } from './screens/MainMenu.js';
 import { appStore, useAppState } from './store.js';
 
-function SandboxScreen(): ReactElement {
+function SandboxScreen({ mapId }: { mapId: MapId }): ReactElement {
   const mountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const mount = mountRef.current;
     if (mount === null) return undefined;
-    const session = new GameSession(mount);
+    const session = new GameSession(mount, mapId);
     return () => {
       session.destroy();
     };
-  }, []);
+  }, [mapId]);
 
   return (
     <>
@@ -35,5 +36,8 @@ function SandboxScreen(): ReactElement {
 
 export function App(): ReactElement {
   const screen = useAppState((s) => s.screen);
-  return <div className="app">{screen === 'menu' ? <MainMenu /> : <SandboxScreen />}</div>;
+  const mapId = useAppState((s) => s.mapId);
+  return (
+    <div className="app">{screen === 'menu' ? <MainMenu /> : <SandboxScreen mapId={mapId} />}</div>
+  );
 }

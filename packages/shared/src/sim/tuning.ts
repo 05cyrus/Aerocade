@@ -107,6 +107,21 @@ export const TUNING = {
     /** Knockback impulse per point of hitscan damage dealt. */
     hitscanKnockbackPerDamage: 0.12,
   },
+  ladder: {
+    /** Climb speed while gripping a ladder, m/s. */
+    climbSpeed: 5.4,
+    /** Horizontal drift allowed while climbing, m/s. */
+    sideSpeed: 2.4,
+    /** Push-off given when jumping clear of a ladder. */
+    jumpOffSpeed: 7.2,
+    /** Sideways shove when jumping off, so you clear the rungs. */
+    jumpOffPush: 3.4,
+    /**
+     * Grace after leaving a ladder before it can be re-gripped. Without it a
+     * jump-off re-attaches on the very next tick and you never let go.
+     */
+    regripDelay: 0.22,
+  },
   pickups: {
     /**
      * Seconds a weapon pad stays empty after being looted before it refills
@@ -116,6 +131,18 @@ export const TUNING = {
     weaponRespawnDelay: 12,
     /** Half-extent of a pickup's collection box, meters. */
     halfSize: 0.55,
+    /** Seconds before a health pad refills. */
+    healthRespawnDelay: 20,
+    /** Health restored by one health box. */
+    healthAmount: 45,
+    /** Seconds before an ammo pad refills. */
+    ammoRespawnDelay: 16,
+    /** Fraction of each carried weapon's reserve an ammo box restores. */
+    ammoFraction: 0.5,
+    /** Seconds before a grenade pad refills. */
+    grenadeRespawnDelay: 18,
+    /** Grenades in one pad-spawned bundle. */
+    grenadeAmount: 2,
     /**
      * Seconds a *dropped* item survives before fading out. Pad-spawned guns
      * never expire; drops do, or a long match silts up with dead players'

@@ -56,6 +56,14 @@ export const Frames = {
   Muzzle: 'muzzle',
   /** Glowing floor disc marking a weapon pad. */
   Pad: 'pad',
+  /** Ladder rung section, tiled vertically. */
+  Ladder: 'ladder',
+  /** Thin one-way platform: stand on top, jump up through. */
+  Platform: 'platform',
+  /** Health box. */
+  HealthBox: 'health-box',
+  /** Ammo crate. */
+  AmmoBox: 'ammo-box',
   /**
    * Plain white rounded rect, drawn twice per overhead health bar (dark
    * backing + tinted fill). A tintable sprite keeps bars inside the atlas
@@ -168,6 +176,10 @@ function collectParts(): Part[] {
     { name: Frames.Grenade, w: 10, h: 10, draw: drawGrenade },
     { name: Frames.Pad, w: 48, h: 20, draw: drawPad },
     { name: Frames.Bar, w: 64, h: 10, draw: drawBar },
+    { name: Frames.Ladder, w: PX_PER_M, h: PX_PER_M, draw: drawLadder },
+    { name: Frames.Platform, w: PX_PER_M, h: 10, draw: drawPlatform },
+    { name: Frames.HealthBox, w: 22, h: 22, draw: drawHealthBox },
+    { name: Frames.AmmoBox, w: 24, h: 20, draw: drawAmmoBox },
     {
       name: Frames.Spark,
       w: 16,
@@ -381,6 +393,52 @@ function drawPad(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
   g.fillEllipse(ox + 24, oy + 12, 26, 9);
   g.fillStyle(0xdff4ff, 0.75);
   g.fillEllipse(ox + 24, oy + 12, 14, 5);
+}
+
+/** Wooden ladder: two rails and evenly spaced rungs, tiling seamlessly. */
+function drawLadder(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  const railW = 4;
+  g.fillStyle(0x8a6a3d, 1);
+  g.fillRect(ox + 5, oy, railW, PX_PER_M);
+  g.fillRect(ox + PX_PER_M - 5 - railW, oy, railW, PX_PER_M);
+  g.fillStyle(0xb08b52, 1);
+  for (let i = 0; i < 4; i++) {
+    g.fillRect(ox + 5, oy + 3 + i * 8, PX_PER_M - 10, 3);
+  }
+}
+
+/** One-way platform: a plank with a bright top edge you can clearly land on. */
+function drawPlatform(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  g.fillStyle(0x6b5230, 1);
+  g.fillRect(ox, oy + 2, PX_PER_M, 8);
+  g.fillStyle(0xa8814c, 1);
+  g.fillRect(ox, oy, PX_PER_M, 3);
+  g.fillStyle(0x4a3720, 0.6);
+  g.fillRect(ox + 6, oy + 5, 3, 4);
+  g.fillRect(ox + PX_PER_M - 9, oy + 5, 3, 4);
+}
+
+/** Health box: white crate with a green cross. */
+function drawHealthBox(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  g.fillStyle(0xf0f4ff, 1);
+  g.fillRoundedRect(ox, oy, 22, 22, 4);
+  g.fillStyle(0xc9d4ee, 1);
+  g.fillRect(ox, oy + 16, 22, 6);
+  g.fillStyle(0x2fbf71, 1);
+  g.fillRect(ox + 8, oy + 4, 6, 14);
+  g.fillRect(ox + 3, oy + 9, 16, 5);
+}
+
+/** Ammo crate: olive box with brass banding. */
+function drawAmmoBox(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  g.fillStyle(0x6c6a3a, 1);
+  g.fillRoundedRect(ox, oy, 24, 20, 3);
+  g.fillStyle(0x88864a, 1);
+  g.fillRect(ox + 2, oy + 2, 20, 7);
+  g.fillStyle(0xffa03c, 1);
+  g.fillRect(ox + 3, oy + 12, 18, 3);
+  g.fillStyle(0x3a3922, 1);
+  g.fillRect(ox + 9, oy + 15, 6, 3);
 }
 
 /** Flat white capsule; tinted at draw time for health-bar backing and fill. */

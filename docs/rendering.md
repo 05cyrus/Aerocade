@@ -95,6 +95,19 @@ Rules:
 The render pass is a single tight loop per pool, iterating by ascending index exactly like the
 sim, touching only entities whose `alive` flag is set.
 
+## Terrain: a viewport-sized window, not a map-sized display list
+
+Foundry is 48 × 27 tiles and could afford one image per solid tile. Outpost Delta is 175 × 98 —
+17,150 tiles, ~4,400 of them solid — and a sprite each would put thousands of objects on the
+display list whose transforms are walked every frame no matter where the camera is.
+
+`TerrainView` instead keeps a **pool sized to the viewport** (about 500 sprites) and re-points it
+at whichever tile rectangle the camera can see, with a few tiles of slack so small pans need no
+work at all. Cost is O(visible), not O(map), and the rebuild only runs when the visible tile rect
+actually changes — a stationary camera costs nothing. This is the chunked-rendering and
+frustum-culling requirement met without leaving the single atlas (ADR-012): ladders, one-way
+platforms and terrain all draw from the same texture, so the whole world is still one batch.
+
 ## Sprite pools mirror sim pools
 
 Sim pools are fixed-capacity (players ×8, projectiles ×256, pickups ×64). The renderer

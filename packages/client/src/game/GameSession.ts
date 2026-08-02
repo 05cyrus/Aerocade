@@ -7,12 +7,13 @@ import {
   TUNING,
   WEAPON_SLOTS,
   addPlayer,
-  createFoundryMap,
+  createMapById,
   createMatch,
   findPickupUnderPlayer,
   setInput,
   stepWorld,
   weaponDef,
+  type MapId,
   type SimWorld,
   type WeaponId,
 } from '@aerocade/shared';
@@ -65,11 +66,11 @@ export class GameSession implements SceneDriver {
   private scoped = false;
   private destroyed = false;
 
-  constructor(parent: HTMLElement) {
+  constructor(parent: HTMLElement, mapId: MapId) {
     appStore.reset(); // no HUD/kill-feed state may leak from a previous match
     // The sandbox is local-only; wall-clock seeding is fine (the sim itself
     // stays deterministic per seed — networked seeds come from the host).
-    this.world = createMatch(createFoundryMap(), Date.now() >>> 0);
+    this.world = createMatch(createMapById(mapId), Date.now() >>> 0);
     this.localPlayer = addPlayer(this.world);
     this.dummies.push(addPlayer(this.world), addPlayer(this.world));
 

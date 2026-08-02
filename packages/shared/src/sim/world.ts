@@ -2,7 +2,7 @@ import {
   MAX_DAMAGE_REQUESTS,
   MAX_PICKUPS,
   MAX_PLAYERS,
-  MAX_WEAPON_PADS,
+  MAX_PICKUP_PADS,
   MAX_PROJECTILES,
   NO_PLAYER,
   SIM_DT,
@@ -65,6 +65,10 @@ export class PlayerPool {
   readonly respawn = new Float32Array(MAX_PLAYERS);
   /** Remaining spawn protection. */
   readonly protect = new Float32Array(MAX_PLAYERS);
+  /** 1 while gripping a ladder: gravity is suspended and climbing is manual. */
+  readonly onLadder = new Uint8Array(MAX_PLAYERS);
+  /** Cooldown after letting go, so a jump-off cannot instantly re-grip. */
+  readonly ladderRegrip = new Float32Array(MAX_PLAYERS);
   /** Buttons held last tick, for edge detection. */
   readonly prevButtons = new Uint16Array(MAX_PLAYERS);
   readonly kills = new Int16Array(MAX_PLAYERS);
@@ -99,6 +103,8 @@ export class PlayerPool {
     this.grenades,
     this.respawn,
     this.protect,
+    this.onLadder,
+    this.ladderRegrip,
     this.prevButtons,
     this.kills,
     this.deaths,
@@ -156,6 +162,10 @@ export class ProjectilePool {
 export const PickupKind = {
   Weapon: 0,
   Grenades: 1,
+  /** Restores health on contact. */
+  Health: 2,
+  /** Refills reserve ammo for every weapon carried. */
+  Ammo: 3,
 } as const;
 
 export type PickupKind = (typeof PickupKind)[keyof typeof PickupKind];
@@ -219,20 +229,20 @@ export class PickupPool {
 }
 
 /**
- * Weapon pads are fixed spawners, not containers: each owns at most one live
+ * Pickup pads are fixed spawners, not containers: each owns at most one live
  * pickup and starts a refill timer when that pickup is taken. Slot _i_
- * corresponds to `map.weaponPads[i]`, so positions stay static map data.
+ * corresponds to `map.pads[i]`, so positions and kinds stay static map data.
  */
 export class WeaponPadPool {
   /** Seconds until this pad spawns a new gun; 0 when it already has one. */
-  readonly timer = new Float32Array(MAX_WEAPON_PADS);
+  readonly timer = new Float32Array(MAX_PICKUP_PADS);
   /** Pickup slot this pad currently owns, or -1. */
-  readonly pickup = new Int8Array(MAX_WEAPON_PADS).fill(-1);
+  readonly pickup = new Int8Array(MAX_PICKUP_PADS).fill(-1);
   /**
    * Weapon this pad last offered, remembered after the pickup is gone so the
    * "never the same gun twice running" rule survives the empty period.
    */
-  readonly lastWeapon = new Int8Array(MAX_WEAPON_PADS).fill(-1);
+  readonly lastWeapon = new Int8Array(MAX_PICKUP_PADS).fill(-1);
 
   readonly all: readonly PoolArray[] = [this.timer, this.pickup, this.lastWeapon];
 }

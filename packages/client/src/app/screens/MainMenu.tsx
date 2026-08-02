@@ -1,11 +1,29 @@
 import type { ReactElement } from 'react';
-import { appStore } from '../store.js';
+import { MAP_IDS, MAP_SUMMARIES } from '@aerocade/shared';
+import { appStore, useAppState } from '../store.js';
 
 export function MainMenu(): ReactElement {
+  const mapId = useAppState((s) => s.mapId);
   return (
     <div className="menu">
       <h1>AEROCADE</h1>
       <div className="tagline">JETPACKS · ROCKETS · ZERO INTERNET</div>
+      <div className="map-picker">
+        {MAP_IDS.map((id) => (
+          <button
+            type="button"
+            key={id}
+            className={`map-option${id === mapId ? ' selected' : ''}`}
+            aria-pressed={id === mapId}
+            onClick={() => {
+              appStore.setMap(id);
+            }}
+          >
+            <span className="map-option-name">{MAP_SUMMARIES[id].name}</span>
+            <span className="map-option-blurb">{MAP_SUMMARIES[id].blurb}</span>
+          </button>
+        ))}
+      </div>
       <button
         type="button"
         onClick={() => {

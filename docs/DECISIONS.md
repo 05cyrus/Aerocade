@@ -298,6 +298,59 @@ offers the same gun. The mechanism is right; the content is thin. Adding one or 
 sidearms (a machine pistol, a hand cannon) is the natural follow-up and needs no code change
 beyond a definition.
 
+## ADR-018: Traversal primitives — ladders, one-way platforms, consumable pickups
+
+A large vertical arena needs more than "walk and jetpack", so three primitives
+landed together. Each is deliberately small and lives in the simulation, because all
+three affect where players can be:
+
+- **Ladders** are a tile flag, not entities. Gripping is deliberate — press up or down while
+  overlapping the rungs — otherwise you would stick to every ladder you ran past. While gripping,
+  gravity is suspended and vertical speed is the player's to choose; **firing is untouched**,
+  because the weapons system never consults ladder state, so you can shoot the whole way up.
+  Jumping off kicks you clear and starts a short re-grip delay, without which the jump
+  re-attaches on the very next tick and you can never let go.
+- **One-way platforms** are a second tile flag. A platform catches a body only when it was
+  _above_ the surface before the step and has now crossed it, which is exactly what lets you
+  jump up through and land on top. A player on a ladder is exempt, so climbing through a
+  platform works.
+- **Health, ammo and grenade pickups** join weapons as pad kinds. All three are consumables and
+  therefore **automatic** (ADR-016): they collect on contact when the player can use them, and
+  a player who is full leaves the box for someone who is not. Only weapons need a button.
+
+Tile flags are a bitfield, so a ladder can run through a platform, and `MapBuilder.ladder()`
+strips `Solid` — a ladder is never allowed to be a wall.
+
+## ADR-019: Outpost Delta is built, not drawn — and its geometry is tested
+
+Outpost Delta is 175 × 98 tiles (5600 × 3136 px), roughly **135× Foundry's area**. Two decisions
+follow from that size:
+
+**Programmatic construction.** A 98-row ASCII grid is unreviewable in a diff and its symmetry
+would drift on the first edit. Instead a `MapBuilder` draws rectangles, platforms, ladders and
+caves; only the left half plus the centre column is authored, and `mirror()` produces the right.
+Symmetry is therefore structural — the test asserting it cannot fail without the mirror breaking.
+
+**The map is verified, not eyeballed.** Hand-placed coordinates on a map this size are wrong by
+default, and they were: the first pass had spawns buried in rock and whole regions cut off. So
+`validateMap` now rejects any spawn or pad inside solid tiles _at construction_, and a test
+flood-fills the finished map and fails unless every spawn, every pad, and >99% of open space is
+reachable from spawn 1. A minimap render was used to catch what neither could: the upper third
+of the map was empty sky, which the brief explicitly forbids, so the sniper nests moved to the
+ceiling band and catwalks now bridge the gap.
+
+**Rendering.** 17,150 tiles cannot be 17,150 sprites. `TerrainView` keeps a pool sized to the
+_viewport_ and re-points it at whichever tile rect is on screen, rebuilding only when that rect
+moves — frustum culling and chunked drawing without leaving the single atlas (ADR-012).
+
+**Art scope, stated plainly.** The reference image is hand-painted: mountains, foliage, painted
+concrete. Aerocade generates every pixel procedurally into one atlas and ships no image files
+(ADR-001, ADR-012). Outpost Delta therefore reproduces the reference's _layout and gameplay_ —
+bunker decks, flank mountains, tunnels, sniper nests, ladders, pickup placement, symmetry — in
+the project's own visual language. Painted parallax backgrounds and decoration passes remain a
+future milestone; `maps/outpost_delta/` holds the folder structure and a README saying which
+folders are code rather than assets.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

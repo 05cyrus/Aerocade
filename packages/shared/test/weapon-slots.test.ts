@@ -45,7 +45,7 @@ function carried(world: SimWorld, player: number, slot: WeaponSlot): number {
 
 /** Take the pad by standing on it and tapping interact. */
 function takePad(world: SimWorld, player: number): void {
-  const pad = world.map.weaponPads[0];
+  const pad = world.map.pads[0];
   if (pad === undefined) throw new Error('no pad');
   teleport(world, player, pad.x, pad.y);
   stage(world, player, { buttons: Buttons.Interact });

@@ -8,6 +8,9 @@ import { useSyncExternalStore } from 'react';
 
 export type Screen = 'menu' | 'sandbox';
 
+/** Map the next sandbox session will load. */
+export type SelectedMap = 'foundry' | 'outpost_delta';
+
 export interface HudState {
   health: number;
   maxHealth: number;
@@ -51,6 +54,7 @@ export interface PickupNotice {
 
 export interface AppState {
   screen: Screen;
+  mapId: SelectedMap;
   hud: HudState;
   killFeed: readonly KillFeedEntry[];
   pickup: PickupNotice | null;
@@ -85,6 +89,7 @@ const initialHud: HudState = {
 
 let state: AppState = {
   screen: 'menu',
+  mapId: 'outpost_delta',
   hud: initialHud,
   killFeed: [],
   pickup: null,
@@ -212,6 +217,11 @@ export const appStore = {
   },
   setScreen(screen: Screen): void {
     state = { ...state, screen };
+    notify();
+  },
+  setMap(mapId: SelectedMap): void {
+    if (state.mapId === mapId) return;
+    state = { ...state, mapId };
     notify();
   },
   setHud(hud: HudState): void {

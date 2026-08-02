@@ -74,37 +74,37 @@ function groundItems(world: SimWorld, dropsOnly = false): number {
 describe('weapon pad placement', () => {
   it('Foundry publishes eight pads, each grounded with headroom', () => {
     const map = createFoundryMap();
-    expect(map.weaponPads).toHaveLength(8);
-    for (const pad of map.weaponPads) {
+    expect(map.pads).toHaveLength(8);
+    for (const pad of map.pads) {
       const tx = Math.floor(pad.x);
       const ty = Math.floor(pad.y);
-      expect(map.solid[ty * map.width + tx]).toBe(0); // pad tile is open
-      expect(map.solid[(ty + 1) * map.width + tx]).toBe(1); // stands on ground
-      expect(map.solid[(ty - 1) * map.width + tx]).toBe(0); // reachable
+      expect(map.tiles[ty * map.width + tx]).toBe(0); // pad tile is open
+      expect(map.tiles[(ty + 1) * map.width + tx]).toBe(1); // stands on ground
+      expect(map.tiles[(ty - 1) * map.width + tx]).toBe(0); // reachable
     }
   });
 
   it('pads are spread across the arena, not clustered', () => {
     const map = createFoundryMap();
-    const ys = map.weaponPads.map((p) => p.y);
+    const ys = map.pads.map((p) => p.y);
     // Pads occupy at least four distinct height bands.
     expect(new Set(ys).size).toBeGreaterThanOrEqual(4);
     expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(map.height / 2);
   });
 
-  it('rejects a map with more pads than the pickup pool', () => {
+  it('rejects a map with more pads than the pad pool', () => {
     const row = '#' + 'W'.repeat(70) + '#';
     const floor = '#'.repeat(72);
     expect(() =>
       parseAsciiMap('big', 'Big', [floor, '#S' + '.'.repeat(68) + 'S#', row, floor]),
-    ).toThrow(/pickup pool/);
+    ).toThrow(/pad pool/);
   });
 });
 
 describe('pad stocking and respawn', () => {
   it('every pad starts stocked with a valid weapon', () => {
     const world = createMatch(createFoundryMap(), 7);
-    for (let i = 0; i < world.map.weaponPads.length; i++) {
+    for (let i = 0; i < world.map.pads.length; i++) {
       expect(padStocked(world, i)).toBe(true);
       expect(padWeapon(world, i)).toBeLessThan(WEAPON_COUNT);
     }
@@ -113,7 +113,7 @@ describe('pad stocking and respawn', () => {
   it('a looted pad stays empty for the respawn delay, then refills', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     takePad(world, p, pad);
@@ -134,7 +134,7 @@ describe('pad stocking and respawn', () => {
   it('refills are random: repeated respawns produce more than one weapon', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
     const seen = new Set<number>();
     for (let cycle = 0; cycle < 12; cycle++) {
@@ -154,7 +154,7 @@ describe('pad stocking and respawn', () => {
   it('a refill never repeats the weapon it just held', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
     for (let cycle = 0; cycle < 20; cycle++) {
       const before = padWeapon(world, 0);
@@ -171,7 +171,7 @@ describe('pickup is opt-in', () => {
   it('standing on a pad without pressing interact takes nothing', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
     const carried = world.players.weapons[p * WEAPON_SLOTS];
 
@@ -186,7 +186,7 @@ describe('pickup is opt-in', () => {
   it('pressing interact off a pad does nothing', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
     teleport(world, p, pad.x + 3, pad.y);
     stage(world, p, { buttons: Buttons.Interact });
@@ -197,7 +197,7 @@ describe('pickup is opt-in', () => {
   it('holding interact does not vacuum up the pad when it respawns', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     takePad(world, p, pad);
@@ -215,7 +215,7 @@ describe('pickup is opt-in', () => {
   it('a second tap after a refill does collect', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     takePad(world, p, pad);
@@ -233,7 +233,7 @@ describe('swapping drops the old weapon', () => {
   it('leaves the previously held gun on the ground with its exact ammo', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     const offered = padWeapon(world, 0) as WeaponId;
@@ -264,7 +264,7 @@ describe('swapping drops the old weapon', () => {
   it('merging ammo into a gun you already carry drops nothing', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     const offered = padWeapon(world, 0) as WeaponId;
@@ -280,7 +280,7 @@ describe('swapping drops the old weapon', () => {
   it('a dropped weapon can be picked back up with the ammo it kept', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     const slotIndex = p * WEAPON_SLOTS;
@@ -498,7 +498,7 @@ describe('grenades are picked up automatically when you have none', () => {
   it('never auto-collects weapons, only grenades', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
     world.players.grenades[p] = 0; // empty, but that must not grab guns
     teleport(world, p, pad.x, pad.y);
@@ -534,7 +534,7 @@ describe('grenades never mask a weapon underneath', () => {
     const owner = addCombatant(world);
     const a = addCombatant(world);
     run(world, 5);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     // Drop a bundle directly on top of the pad's gun.
@@ -561,7 +561,7 @@ describe('grenades never mask a weapon underneath', () => {
     const owner = addCombatant(world);
     const a = addCombatant(world);
     run(world, 5);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
     const bundle = bundleAt(world, owner, pad.x, pad.y);
     world.pickups.mag[bundle] = 2;
@@ -610,7 +610,7 @@ describe('collecting a pad', () => {
   it('swaps the active slot and loads it fully', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     const offered = padWeapon(world, 0) as WeaponId;
@@ -631,7 +631,7 @@ describe('collecting a pad', () => {
   it('leaves the other slot untouched', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
     const offered = padWeapon(world, 0) as WeaponId;
     world.players.weapons[p * WEAPON_SLOTS] = (offered + 1) % WEAPON_COUNT;
@@ -646,7 +646,7 @@ describe('collecting a pad', () => {
   it('tops up reserve ammo instead of swapping when already carried', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     const offered = padWeapon(world, 0) as WeaponId;
@@ -673,7 +673,7 @@ describe('collecting a pad', () => {
     const world = padRoom();
     const a = addCombatant(world);
     const b = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
 
     teleport(world, a, pad.x, pad.y);
@@ -688,7 +688,7 @@ describe('collecting a pad', () => {
   it('a dead player standing on a pad does not collect it', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
     teleport(world, p, pad.x, pad.y);
     world.players.status[p] = 0;
@@ -700,7 +700,7 @@ describe('collecting a pad', () => {
   it('is not collectable from across the room', () => {
     const world = padRoom();
     const p = addCombatant(world);
-    const pad = world.map.weaponPads[0];
+    const pad = world.map.pads[0];
     if (pad === undefined) throw new Error('no pad');
     teleport(world, p, pad.x + 3, pad.y);
     stage(world, p, { buttons: Buttons.Interact });

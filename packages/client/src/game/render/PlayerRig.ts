@@ -4,8 +4,9 @@ import { ATLAS, Frames, RIG_SCALE, weaponFrame } from './textures.js';
 
 /**
  * An articulated soldier assembled from procedural atlas frames: helmeted
- * head, armored torso, jetpack, two legs with a speed-driven run cycle, and
- * an arm that holds the active weapon and tracks the aim angle.
+ * head, vested torso, pack, two legs with a speed-driven run cycle, and an arm
+ * that holds the active weapon and tracks the aim angle. Its appearance is
+ * locked by docs/character.md — check that doc before touching layout or art.
  *
  * The rig is pure presentation — it consumes interpolated positions plus a
  * few sim facts (velocity, grounded) and keeps only cosmetic state of its own
@@ -15,6 +16,12 @@ import { ATLAS, Frames, RIG_SCALE, weaponFrame } from './textures.js';
  * draw call (docs/performance.md). Arm and gun are positioned with explicit
  * math rather than a nested container, keeping the display list flat.
  *
+ * The uniform is olive and untinted. Player color rides on two small parts —
+ * a shoulder insignia and a helmet pad — because tint multiplies and an olive
+ * base under a saturated team color just goes muddy. Each is glued to its
+ * parent part through that part's rotation, so they track head aim and torso
+ * lean instead of sliding off.
+ *
  * Facing is handled by mirroring the root container (scaleX = -1). Inside a
  * mirrored container a rotation r appears as PI - r on screen (y-down), so
  * the arm uses localAim = PI - aim when facing left.
@@ -22,12 +29,22 @@ import { ATLAS, Frames, RIG_SCALE, weaponFrame } from './textures.js';
 
 // Local-space layout in screen pixels (container origin = collision center;
 // the box is 27×53 px at 32 px/m — head crown ≈ -26, boot soles ≈ +26).
+// Proportions are the reference's, as fractions of the 52 px standing height:
+// head block 16 px (31%), torso 18 px, hip-to-sole 20 px (38%).
 const HEAD_Y = -17;
-const TORSO_Y = -2;
-const HIP_Y = 9;
+const TORSO_Y = -3;
+const HIP_Y = 7.2;
 const HIP_SPREAD = 3.5;
 const SHOULDER_X = 1;
 const SHOULDER_Y = -7;
+// Team-color parts, as offsets from their parent part's pivot. The helmet pad
+// sits exactly over the dark side pad drawn into the head frame; the insignia
+// sits high and slightly back, on the shoulder rather than the chest, and clear
+// of the arm's sweep.
+const HELMET_PAD_DX = -3.25;
+const HELMET_PAD_DY = -3.65;
+const INSIGNIA_DX = -2;
+const INSIGNIA_DY = -5.5;
 /** Distance from shoulder to the grip, along the aim direction. */
 const GRIP_REACH = 8;
 
@@ -53,6 +70,8 @@ export class PlayerRig {
   private readonly pack: Phaser.GameObjects.Sprite;
   private readonly arm: Phaser.GameObjects.Sprite;
   private readonly gun: Phaser.GameObjects.Sprite;
+  private readonly insignia: Phaser.GameObjects.Sprite;
+  private readonly helmetPad: Phaser.GameObjects.Sprite;
 
   private runPhase = 0;
   private legBackPose = 0;
@@ -63,12 +82,15 @@ export class PlayerRig {
     const make = (frame: string): Phaser.GameObjects.Sprite =>
       scene.make.sprite({ key: ATLAS, frame }, false).setScale(RIG_SCALE);
 
-    // Draw order (back to front): back leg, jetpack, torso, front leg, head, arm, gun.
+    // Draw order (back to front): back leg, pack, torso, insignia, front leg,
+    // head, helmet pad, arm, gun.
     this.legBack = make(Frames.Leg).setOrigin(0.5, 0.06);
     this.pack = make(Frames.Jetpack).setOrigin(0.5, 0.5);
     this.torso = make(Frames.Torso).setOrigin(0.5, 0.5);
+    this.insignia = make(Frames.Insignia).setOrigin(0.5, 0.5);
     this.legFront = make(Frames.Leg).setOrigin(0.5, 0.06);
     this.head = make(Frames.Head).setOrigin(0.5, 0.62);
+    this.helmetPad = make(Frames.HelmetPad).setOrigin(0.5, 0.5);
     this.arm = make(Frames.Arm).setOrigin(0.08, 0.5);
     this.gun = make(Frames.Rocket).setOrigin(0.18, 0.6);
 
@@ -76,16 +98,19 @@ export class PlayerRig {
       this.legBack,
       this.pack,
       this.torso,
+      this.insignia,
       this.legFront,
       this.head,
+      this.helmetPad,
       this.arm,
       this.gun,
     ]);
     this.container.setDepth(5).setVisible(false);
 
-    // Team tint on armor; visor, boots, and guns keep the shared palette.
-    this.head.setTint(tint);
-    this.torso.setTint(tint);
+    // The uniform stays olive; only the insignia and helmet pad take the
+    // player's color (docs/character.md).
+    this.insignia.setTint(tint);
+    this.helmetPad.setTint(tint);
 
     this.legBack.setPosition(-HIP_SPREAD, HIP_Y);
     this.legFront.setPosition(HIP_SPREAD, HIP_Y);
@@ -150,17 +175,38 @@ export class PlayerRig {
     this.legFront.setRotation(this.legFrontPose);
 
     // Torso leans into horizontal motion; upper body rides the run bob.
-    this.torso.setRotation(
-      Phaser.Math.Clamp(localVel * TORSO_LEAN_PER_MS, -TORSO_LEAN_MAX, TORSO_LEAN_MAX),
+    const torsoRot = Phaser.Math.Clamp(
+      localVel * TORSO_LEAN_PER_MS,
+      -TORSO_LEAN_MAX,
+      TORSO_LEAN_MAX,
     );
+    this.torso.setRotation(torsoRot);
     const bob = running ? Math.abs(Math.sin(this.runPhase)) * -RUN_BOB_PX : 0;
     this.torso.setY(TORSO_Y + bob);
-    this.pack.setPosition(-8, -5 + bob);
+    this.pack.setPosition(-9, -5 + bob);
 
+    const headRot = Phaser.Math.Clamp(localAim * HEAD_TRACK_FRAC, -HEAD_TRACK_MAX, HEAD_TRACK_MAX);
     this.head.setY(HEAD_Y + bob);
-    this.head.setRotation(
-      Phaser.Math.Clamp(localAim * HEAD_TRACK_FRAC, -HEAD_TRACK_MAX, HEAD_TRACK_MAX),
-    );
+    this.head.setRotation(headRot);
+
+    // Team-color parts orbit their parent's pivot so they stay glued through
+    // torso lean and head tracking rather than sliding off the uniform.
+    const torsoCos = Math.cos(torsoRot);
+    const torsoSin = Math.sin(torsoRot);
+    this.insignia
+      .setPosition(
+        INSIGNIA_DX * torsoCos - INSIGNIA_DY * torsoSin,
+        TORSO_Y + bob + INSIGNIA_DX * torsoSin + INSIGNIA_DY * torsoCos,
+      )
+      .setRotation(torsoRot);
+    const headCos = Math.cos(headRot);
+    const headSin = Math.sin(headRot);
+    this.helmetPad
+      .setPosition(
+        HELMET_PAD_DX * headCos - HELMET_PAD_DY * headSin,
+        HEAD_Y + bob + HELMET_PAD_DX * headSin + HELMET_PAD_DY * headCos,
+      )
+      .setRotation(headRot);
 
     // Arm pivots at the shoulder; the gun rides at the end of the reach.
     const shoulderY = SHOULDER_Y + bob;

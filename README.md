@@ -240,6 +240,7 @@ room. Performance budgets and tuning targets: [docs/performance.md](docs/perform
 | [docs/physics.md](docs/physics.md)           | Fixed-timestep physics, AABB/tile collision, tuning               |
 | [docs/networking.md](docs/networking.md)     | Transports, protocol, prediction/reconciliation, lag compensation |
 | [docs/rendering.md](docs/rendering.md)       | Phaser integration, interpolation, camera                         |
+| [docs/character.md](docs/character.md)       | The player character's locked design: proportions, palette, parts |
 | [docs/ui.md](docs/ui.md)                     | React shell, HUD, menus, input mapping                            |
 | [docs/testing.md](docs/testing.md)           | Vitest/Playwright strategy, determinism tests                     |
 | [docs/performance.md](docs/performance.md)   | Budgets, zero-allocation rules, profiling                         |

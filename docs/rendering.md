@@ -132,6 +132,9 @@ armored torso, a jetpack, two legs, an arm, and the held weapon — seven sprite
 `Container`. Facing is the container's `scaleX = ±1`; because a mirrored container renders a
 rotation `r` as `π − r` (y-down), the arm pre-mirrors the aim to `π − aim` when facing left.
 
+The soldier's appearance — proportions, palette, per-part content, and what may never change —
+is locked in [character.md](character.md). Check rig or texture changes against it.
+
 The rig is **pure presentation**. It reads interpolated position/aim plus three sim facts
 (`velX`, `grounded`, active weapon) and owns only cosmetic state — a run phase. Nothing it
 computes feeds back into the simulation.

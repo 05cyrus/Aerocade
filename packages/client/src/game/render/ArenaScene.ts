@@ -599,14 +599,16 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   /**
-   * A short-lived tumble of armor pieces where a soldier fell. Allocates a
-   * handful of sprites, but only on the (rare) death event — they self-destroy.
+   * A short-lived tumble of gear where a soldier fell. Allocates a handful of
+   * sprites, but only on the (rare) death event — they self-destroy.
    */
   private spawnDeathDebris(x: number, y: number, tint: number): void {
-    const parts = [Frames.Head, Frames.Leg, Frames.Leg, Frames.Arm];
+    const parts = [Frames.Head, Frames.Leg, Frames.Leg, Frames.Arm, Frames.Insignia];
     for (const frameName of parts) {
       const piece = this.add.sprite(x, y, ATLAS, frameName).setScale(RIG_SCALE).setDepth(6);
-      if (frameName === Frames.Head) piece.setTint(tint);
+      // The uniform is untinted olive, so the insignia is what shows whose
+      // gear this was (docs/character.md).
+      if (frameName === Frames.Insignia) piece.setTint(tint);
       const driftX = Phaser.Math.Between(-70, 70);
       const rise = Phaser.Math.Between(30, 90);
       this.tweens.add({

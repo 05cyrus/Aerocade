@@ -578,6 +578,33 @@ assertion in this project must wait on sim ticks, never wall clock.
 Not done: no rebinding (the same blocker as the keyboard — `KeyboardMouseInput` is not yet
 data-driven), no rumble, no per-pad profiles, and no on-screen indication that a pad is connected.
 
+### Follow-up: the touch layer was eating HUD taps
+
+Reported as "not able to click scope in mobile", and it was worse than one button. The stick zones
+are full-height halves of the screen and `.touch-layer` carried `z-index: 5` while `.hud` declared
+none, so DOM order put the zones **on top of** the HUD. Three controls were dead on touch: scope and
+pickup (inside the right/aim zone) and mute (inside the left/move zone). Pickup is how a weapon is
+taken on a phone, so the map was effectively unplayable there.
+
+`docs/ui.md` §5 already said "zones exclude the button cluster's bounds"; the requirement was missed
+for the HUD's own buttons.
+
+**Fix:** `.hud` gets `z-index: 6`, above the layer. Raising the whole HUD is safe precisely because
+its root is `pointer-events: none` and only interactive children re-enable it (§1) — everything else
+still passes through to the sticks.
+
+**Guarded by a test that was proven to fail.** `hud-stacking.test.ts` asserts the invariant against
+`styles.css` — that both layers declare a z-index, that the HUD's is higher, that the rotate prompt
+is above both, and that the HUD root stays pointer-transparent. Before trusting it, the fix was
+reverted and the browser probe re-run: it reported `.scope-button BLOCKED by .touch-zone
+touch-zone-right` and `.mute-toggle BLOCKED by .touch-zone touch-zone-left`, reproducing the bug
+exactly. It is a CSS invariant rather than an e2e test because Playwright stays out of the test
+dependencies until the networking milestone (docs/testing.md).
+
+Writing that test also surfaced a second, quieter problem: `.rotate-prompt` declared its stacking
+only _inside_ its portrait media query, so the base rule had no z-index at all. Layout now lives in
+the base rule and the query flips visibility only.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

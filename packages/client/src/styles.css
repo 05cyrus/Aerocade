@@ -129,6 +129,13 @@ body,
   inset: 0;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
+  /* Above the touch control layer (z-index 5). The stick zones are full-height
+     halves of the screen, so without this they sit on top of the scope, pickup
+     and mute buttons and swallow every tap meant for them. Raising the whole HUD
+     is safe because its root is pointer-events: none and only the interactive
+     children re-enable it — everything else still passes through to the zones
+     underneath (docs/ui.md §1). */
+  z-index: 6;
 }
 
 .hud-corner {
@@ -727,6 +734,7 @@ body,
   inset: 0;
   touch-action: none;
   pointer-events: none;
+  /* Below the HUD (z-index 6) on purpose: the HUD's buttons must win a tap. */
   z-index: 5;
 }
 
@@ -807,22 +815,25 @@ body,
    ignores it, block play rather than hand the player an unusable layout.
    Base rule FIRST — with the media query above it, the later `display: none`
    won on equal specificity and the prompt could never appear. */
+/* Everything except visibility lives in the base rule, so the stacking order is
+   declared in one place instead of hiding inside a media query. The query then
+   only flips it on. */
 .rotate-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
   display: none;
+  place-content: center;
+  gap: 12px;
+  text-align: center;
+  background: #121714;
+  color: #e8efe9;
+  font-size: 18px;
+  letter-spacing: 0.08em;
 }
 @media (orientation: portrait) {
   .rotate-prompt {
-    position: fixed;
-    inset: 0;
-    z-index: 20;
     display: grid;
-    place-content: center;
-    gap: 12px;
-    text-align: center;
-    background: #121714;
-    color: #e8efe9;
-    font-size: 18px;
-    letter-spacing: 0.08em;
   }
 }
 

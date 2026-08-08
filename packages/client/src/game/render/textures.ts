@@ -64,9 +64,31 @@ const WOOD_SHADE = 0x53381f;
 /** Near-white base for the only two team-tinted parts. */
 const TEAM_BASE = 0xf2f4f8;
 
+/**
+ * Terrain palette. Warm rock and moss rather than the blue-slate the tileset
+ * shipped with: one flat blue square everywhere made a carved cave complex read
+ * as a stack of blocks. Values sit alongside the character's olive so soldier
+ * and terrain belong to the same world.
+ */
+const ROCK = 0x5d5347; // exposed rock face
+const ROCK_LIT = 0x736858; // upper face catching light
+const ROCK_CREVICE = 0x3e3830; // seams between blocks
+const ROCK_DEEP = 0x2a2620; // buried interior, far from any opening
+const ROCK_DEEP_SEAM = 0x201d18;
+const MOSS = 0x6b7a3f; // growth on every walkable top edge
+const MOSS_LIT = 0x86974f;
+
 /** Frame names within the atlas. */
 export const Frames = {
   Tile: 'tile',
+  /** Solid with open air above: a walkable ledge, mossy and lit. */
+  TileSurface: 'tile-surface',
+  /** Solid with rock above and below but an opening beside it: a cave wall. */
+  TileRock: 'tile-rock',
+  /** Solid forming a cave roof — open air beneath it. */
+  TileCeiling: 'tile-ceiling',
+  /** Fully buried rock; the darkest, so cave mouths read as openings. */
+  TileDeep: 'tile-deep',
   Head: 'head',
   Torso: 'torso',
   Leg: 'leg',
@@ -186,6 +208,10 @@ export function generateTextures(scene: Phaser.Scene): void {
 function collectParts(): Part[] {
   return [
     { name: Frames.Tile, w: PX_PER_M, h: PX_PER_M, draw: drawTile },
+    { name: Frames.TileSurface, w: PX_PER_M, h: PX_PER_M, draw: drawTileSurface },
+    { name: Frames.TileRock, w: PX_PER_M, h: PX_PER_M, draw: drawTileRock },
+    { name: Frames.TileCeiling, w: PX_PER_M, h: PX_PER_M, draw: drawTileCeiling },
+    { name: Frames.TileDeep, w: PX_PER_M, h: PX_PER_M, draw: drawTileDeep },
     { name: Frames.Head, w: 36, h: 32, draw: drawHead },
     { name: Frames.Torso, w: 32, h: 36, draw: drawTorso },
     { name: Frames.Leg, w: 14, h: 40, draw: drawLeg },
@@ -229,15 +255,87 @@ function collectParts(): Part[] {
 
 // ---------- world ----------
 
+/**
+ * Rock body shared by every terrain variant: a seamed face with irregular
+ * blotches so a wall of them does not read as a grid of identical squares. The
+ * blotch positions are fixed rather than random, because texture generation
+ * must produce the same atlas on every boot.
+ */
+function rockBody(
+  g: Phaser.GameObjects.Graphics,
+  ox: number,
+  oy: number,
+  face: number,
+  seam: number,
+  lit: number,
+): void {
+  const T = PX_PER_M;
+  // Edge-to-edge fill with NO border. A per-tile outline turns a rock mass into
+  // brickwork — the single biggest reason the terrain read as stacked blocks —
+  // so neighbouring tiles instead merge into one continuous face and the
+  // silhouette does all the shape work.
+  g.fillStyle(face, 1);
+  g.fillRect(ox, oy, T, T);
+
+  // Crevices kept away from the tile edges so they never line up into a grid.
+  g.fillStyle(seam, 1);
+  g.fillRect(ox + 13, oy + 5, 3, 9);
+  g.fillRect(ox + 6, oy + 16, 13, 3);
+  g.fillRect(ox + 22, oy + 18, 3, 9);
+  g.fillRect(ox + 3, oy + 24, 8, 3);
+
+  // Lit boulder faces, offset from the crevices so the rock reads as chunky.
+  g.fillStyle(lit, 1);
+  g.fillRect(ox + 4, oy + 6, 8, 8);
+  g.fillRect(ox + 18, oy + 8, 6, 6);
+  g.fillRect(ox + 14, oy + 21, 7, 6);
+  g.fillRect(ox + 26, oy + 3, 5, 7);
+}
+
+/** Buried rock: the default, and the darkest so openings read as openings. */
 function drawTile(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
-  g.fillStyle(0x2a3350, 1);
-  g.fillRect(ox, oy, PX_PER_M, PX_PER_M);
-  g.fillStyle(0x333e63, 1);
-  g.fillRect(ox + 1, oy + 1, PX_PER_M - 2, PX_PER_M - 2);
-  g.fillStyle(0x2e3859, 1);
-  g.fillRect(ox + 3, oy + 3, PX_PER_M - 6, PX_PER_M - 6);
-  g.fillStyle(0x445081, 1);
-  g.fillRect(ox, oy, PX_PER_M, 2); // top highlight reads as a walkable edge
+  rockBody(g, ox, oy, ROCK_DEEP, ROCK_DEEP_SEAM, 0x322d26);
+}
+
+function drawTileDeep(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  rockBody(g, ox, oy, ROCK_DEEP, ROCK_DEEP_SEAM, 0x322d26);
+}
+
+/** Cave wall: lighter than buried rock, since light reaches it. */
+function drawTileRock(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  rockBody(g, ox, oy, ROCK, ROCK_CREVICE, ROCK_LIT);
+}
+
+/** A walkable ledge: mossy, lit along the top edge. This is what reads as floor. */
+function drawTileSurface(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  rockBody(g, ox, oy, ROCK, ROCK_CREVICE, ROCK_LIT);
+  const T = PX_PER_M;
+  g.fillStyle(MOSS, 1);
+  g.fillRect(ox, oy, T, 4);
+  g.fillStyle(MOSS_LIT, 1);
+  g.fillRect(ox, oy, T, 2);
+  // Moss trailing unevenly over the lip, so the edge is not a ruler-straight
+  // line — the tile is flipped per position, so this reads differently along
+  // a run of ledges instead of repeating.
+  g.fillStyle(MOSS, 1);
+  g.fillRect(ox + 3, oy + 4, 4, 5);
+  g.fillRect(ox + 12, oy + 4, 3, 3);
+  g.fillRect(ox + 19, oy + 4, 5, 7);
+  g.fillRect(ox + 28, oy + 4, 3, 2);
+}
+
+/** A cave roof: dark underside with a hanging lip. */
+function drawTileCeiling(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  rockBody(g, ox, oy, ROCK, ROCK_CREVICE, ROCK_LIT);
+  const T = PX_PER_M;
+  g.fillStyle(ROCK_CREVICE, 1);
+  g.fillRect(ox, oy + T - 6, T, 6);
+  g.fillStyle(ROCK_DEEP_SEAM, 1);
+  g.fillRect(ox, oy + T - 3, T, 3);
+  // Stubby stalactites so a ceiling never looks like a floor upside down.
+  g.fillStyle(ROCK_CREVICE, 1);
+  g.fillRect(ox + 6, oy + T - 11, 4, 6);
+  g.fillRect(ox + 20, oy + T - 9, 3, 4);
 }
 
 // ---------- character parts (side view, facing right, at 2× scale) ----------

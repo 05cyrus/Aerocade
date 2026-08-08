@@ -75,7 +75,19 @@ export class TerrainView {
         if ((flags & TileFlag.Solid) !== 0) {
           const sprite = this.solid[s];
           if (sprite !== undefined) {
-            sprite.setPosition(px, py).setVisible(true);
+            const frame = this.rockFrame(tx, ty);
+            // Flip per tile so one frame does not visibly tile into a grid.
+            // Surfaces and roofs may only flip horizontally — mirroring them
+            // vertically would put the moss cap underneath or hang stalactites
+            // off a floor. Buried rock and walls can flip both ways.
+            const h = TerrainView.hash(tx, ty);
+            const canFlipY = frame === Frames.TileRock || frame === Frames.TileDeep;
+            sprite
+              .setPosition(px, py)
+              .setFrame(frame)
+              .setFlipX((h & 1) === 1)
+              .setFlipY(canFlipY && (h & 2) === 2)
+              .setVisible(true);
             s += 1;
           }
         }
@@ -99,6 +111,41 @@ export class TerrainView {
     for (let i = s; i < this.solid.length; i++) this.solid[i]?.setVisible(false);
     for (let i = l; i < this.ladders.length; i++) this.ladders[i]?.setVisible(false);
     for (let i = pf; i < this.platforms.length; i++) this.platforms[i]?.setVisible(false);
+  }
+
+  /**
+   * Deterministic per-tile hash. Deliberately not the sim RNG and not
+   * `Math.random`: the same tile must look the same on every boot and on every
+   * client, or terrain would shimmer as the view rect is rebuilt.
+   */
+  private static hash(tx: number, ty: number): number {
+    let h = (tx * 73856093) ^ (ty * 19349663);
+    h ^= h >>> 13;
+    h = (h * 1274126177) | 0;
+    return (h ^ (h >>> 16)) & 0xff;
+  }
+
+  /** Solid for terrain-shading purposes; out of bounds counts as rock. */
+  private isRock(tx: number, ty: number): boolean {
+    if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return true;
+    return ((this.map.tiles[ty * this.map.width + tx] ?? 0) & TileFlag.Solid) !== 0;
+  }
+
+  /**
+   * Choose a rock frame from the tile's neighbours, so the same tile grid reads
+   * as ledges, cave walls, roofs and buried rock without the map carrying any
+   * material data. This is purely presentation — the sim knows only "solid".
+   *
+   * It is also what makes the level legible: a mossy lit top edge is the visual
+   * promise "you can stand here", and buried rock being darkest is what makes a
+   * cave mouth read as an opening rather than as a differently-coloured wall.
+   * Called only while the visible rect is being rebuilt, never per frame.
+   */
+  private rockFrame(tx: number, ty: number): string {
+    if (!this.isRock(tx, ty - 1)) return Frames.TileSurface; // walkable ledge
+    if (!this.isRock(tx, ty + 1)) return Frames.TileCeiling; // cave roof
+    if (!this.isRock(tx - 1, ty) || !this.isRock(tx + 1, ty)) return Frames.TileRock; // wall
+    return Frames.TileDeep; // buried
   }
 
   destroy(): void {

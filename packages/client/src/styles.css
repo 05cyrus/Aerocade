@@ -702,3 +702,17 @@ body,
   font-size: 11px;
   letter-spacing: 0.04em;
 }
+
+/* Sound toggle: reuses the scorebox chip so the HUD keeps one visual language,
+   with a dimmed state that reads as "off" at a glance. */
+.mute-toggle {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: none;
+  pointer-events: auto;
+  letter-spacing: 0.08em;
+}
+.mute-toggle.muted {
+  opacity: 0.45;
+}

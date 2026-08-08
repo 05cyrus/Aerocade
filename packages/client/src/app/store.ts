@@ -71,6 +71,8 @@ export interface AppState {
   scopeZoom: number;
   /** Data-URL icon per WeaponId, cropped from the render atlas at boot. */
   weaponIcons: readonly string[];
+  /** Sound off. Not persisted yet — settings storage is a later milestone. */
+  muted: boolean;
 }
 
 const initialHud: HudState = {
@@ -103,6 +105,7 @@ let state: AppState = {
   scoped: false,
   scopeZoom: 1,
   weaponIcons: [],
+  muted: false,
 };
 
 const listeners = new Set<() => void>();
@@ -223,6 +226,11 @@ export const appStore = {
   },
   setScreen(screen: Screen): void {
     state = { ...state, screen };
+    notify();
+  },
+  /** Flip the sound on/off. The scene watches this and moves its master gain. */
+  toggleMute(): void {
+    state = { ...state, muted: !state.muted };
     notify();
   },
   setMap(mapId: SelectedMap): void {

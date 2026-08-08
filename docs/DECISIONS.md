@@ -390,12 +390,74 @@ traversal were then driven with real input. That last step mattered — a _tappe
 clear a 1-tile step, because `jumpCutGravityMult` 2.2 cuts a released jump short, so an early
 "the terrain is blocked" reading was the test's fault rather than the map's.
 
-**Art scope, stated plainly (as ADR-019).** The reference is a painted rocky/industrial complex.
-Hollow Works reproduces its _structure_ — five layers, arch caves, a central bridge, throats,
-tunnels, spawn and weapon placement — in the project's existing single-atlas visual language.
-Terrain still draws one tile frame, so rock, concrete and steel are not yet visually distinct;
-that needs a per-tile material channel in `MapDef` plus renderer work, and is deliberately not in
-this change.
+**Terrain reads as rock, and the map carries no material data to do it.** One flat blue-slate
+tile everywhere made a carved cave complex look like stacked blocks, which defeated the point of
+carving it. Fixed entirely in the renderer, with no new sim or map data:
+
+- `TerrainView.rockFrame()` picks a frame from the tile's **neighbours** — open above is a
+  walkable ledge (mossy, lit), open below is a cave roof (dark underside, stalactites), an
+  opening beside it is a cave wall, and anything fully buried is the darkest rock. So the grid
+  the sim knows only as "solid" renders as ledges, walls, roofs and bedrock. Buried rock being
+  darkest is what makes a cave mouth read as an opening rather than as a differently-coloured
+  wall, and the mossy lit top edge is the visual promise "you can stand here".
+- **No per-tile border.** A tile outline is what turned a rock mass into brickwork; tiles now
+  fill edge to edge and merge into one face, leaving the silhouette to do the shape work.
+- **Deterministic per-tile flipping** (a hash of x,y — never `Math.random`, so terrain cannot
+  shimmer between rebuilds) breaks the repeat without extra atlas frames. Surfaces and roofs
+  flip only horizontally; mirroring them vertically would hang moss underneath or stalactites
+  off a floor.
+- The arena background moves from navy to a misty ridge haze.
+
+All five frames join the single atlas, so this costs no extra draw calls (ADR-012), and frames
+are assigned only while the visible rect is rebuilt — never per frame.
+
+Still not reproduced from the reference: distinct concrete and steel materials for the ruins and
+the works (they render as rock), painted parallax backdrops, and decorative props — pipes,
+machinery and crates exist as collision geometry but are drawn as rock rather than as objects.
+
+## ADR-021: Sound is synthesised, and it is our own Web Audio graph
+
+The game shipped silent. Sound is now generated the same way art is — from code at boot, no
+files — which keeps ADR-001 (originality by construction) and ADR-007 (a tiny PWA precache)
+intact for audio too.
+
+**We own the AudioContext; Phaser stays `noAudio: true`.** Phaser's sound manager exists to load
+and decode asset files and mix them. We generate every buffer ourselves and need none of that, so
+routing through it would add a layer and a second `AudioContext` for nothing. `docs/rendering.md`
+previously promised "Web Audio via Phaser sound manager"; that is now corrected — Phaser owns no
+audio at all.
+
+**Synthesis is pure and testable.** `sfx.ts` returns mono `Float32Array` data and never touches
+the DOM, so it is unit tested in Node — these are the **first tests in the client package**, which
+until now had none and whose `test` script failed outright with "no test files found". The tests
+assert the properties that actually break audio and that reading the code will not catch: no
+NaN (one silences a whole buffer on some implementations), nothing outside [-1, 1] (clips the
+master), nothing near-silent, clip length scaling with sample rate, and byte-identical output
+across two renders.
+
+**Noise is seeded, never `Math.random`.** Clips must be identical on every boot for the same
+reason textures are. This is render-side RNG and is entirely separate from the sim's (ADR-009).
+
+**Oscillators integrate phase.** Evaluating `sin(2π f t)` with a swept `f` is not an oscillator —
+the phase jumps every sample and it buzzes instead of sliding.
+
+**One looping voice for jetpacks, not one per player.** The loop is created lazily on first thrust
+and only its gain is ramped; restarting a buffer per frame would click and allocate. Intensity is
+the loudest distance-weighted thruster in the arena, so a fight overhead is audible without paying
+for eight loops.
+
+**The context is released on scene shutdown.** An `AudioContext` is a scarce browser resource —
+Chrome allows only a handful per page — and it is not a Phaser object, so `game.destroy()` does
+not reclaim it. Without an explicit release, leaving the sandbox and returning leaked one per
+visit and audio would silently stop working after a few rounds. React StrictMode double-mounts the
+session in development, which is how the leak was caught: instrumenting `AudioContext` in a
+headless browser showed two constructed and none closed.
+
+**Mute is a single master gain**, driven from the store by the HUD toggle, and muted playback
+allocates no nodes at all. Volume settings and persistence wait for the settings screen (M5).
+
+Not done: no footstep, landing or impact sounds; no music; no per-material impact variation; no
+audio for remote players' reloads distinguishable from your own.
 
 ## Milestones
 

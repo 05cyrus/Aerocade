@@ -87,7 +87,7 @@ export class GameSession implements SceneDriver {
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent,
-      backgroundColor: '#0b1020',
+      backgroundColor: '#43514a', // misty ridge haze, not navy — see docs/DECISIONS.md ADR-020
       banner: false,
       audio: { noAudio: true },
       scale: {

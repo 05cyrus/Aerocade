@@ -25,6 +25,9 @@ import {
 } from './textures.js';
 import { PlayerRig } from './PlayerRig.js';
 import { TerrainView } from './TerrainView.js';
+import { appStore } from '../../app/store.js';
+import { SoundBank } from '../audio/SoundBank.js';
+import { SfxId } from '../audio/sfx.js';
 import type { RenderInterpolator } from './RenderInterpolator.js';
 
 /** Target visible area in meters; zoom adapts the viewport to show this much. */
@@ -49,6 +52,20 @@ const HEALTH_BAR_WIDTH_PX = 64 * HEALTH_BAR_SCALE;
 const HEALTH_BAR_Y_OFFSET_PX = -34;
 /** Empty-portion color; must contrast with the arena, not blend into it. */
 const HEALTH_BAR_BACK_COLOR = 0x39456b;
+/**
+ * Firing sound per weapon, indexed by `WeaponId`. Guns that share a class share
+ * a clip — the roster should sound like one armoury, not seven unrelated noises.
+ */
+const SHOT_SFX: readonly SfxId[] = [
+  SfxId.ShotLight, // Rivet Pistol
+  SfxId.ShotLight, // Vortex SMG
+  SfxId.ShotRifle, // Pulse Rifle
+  SfxId.ShotShotgun, // Scattergun
+  SfxId.ShotSniper, // Longbolt Rifle
+  SfxId.ShotLauncher, // Thumper
+  SfxId.ShotLauncher, // Lobber
+];
+
 /** Fill colors interpolated by remaining health: green → amber → red. */
 const HEALTH_COLOR_FULL = 0x55e08c;
 const HEALTH_COLOR_MID = 0xf5e663;
@@ -87,6 +104,8 @@ export class ArenaScene extends Phaser.Scene {
   private readonly localPlayer: number;
 
   private terrain: TerrainView | null = null;
+  /** Null when the browser gives us no Web Audio — the game just runs silent. */
+  private sfx: SoundBank | null = null;
   private rigs: PlayerRig[] = [];
   private projectileSprites = new Map<number, Phaser.GameObjects.Sprite>();
   /** One disc per map weapon pad (static furniture). */
@@ -125,6 +144,7 @@ export class ArenaScene extends Phaser.Scene {
   // Phaser lifecycle hook (not on the Scene base type, so no `override`).
   create(): void {
     generateTextures(this);
+    this.buildAudio();
     this.buildTiles();
     this.buildPickups();
     this.buildPlayers();
@@ -141,6 +161,77 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   // ---------- construction ----------
+
+  /**
+   * Generate the sound bank. Clips are synthesised here for the same reason
+   * textures are (ADR-001): nothing is loaded, so there is no asset step.
+   *
+   * A browser keeps an AudioContext suspended until a user gesture. Entering
+   * the sandbox is a click, so this usually starts running immediately, but the
+   * pointer/key hooks cover the cases where it does not — without them the game
+   * can sit permanently silent with no indication why.
+   */
+  private buildAudio(): void {
+    this.sfx = SoundBank.tryCreate();
+    if (this.sfx === null) return;
+    this.sfx.setMuted(appStore.getState().muted);
+    this.sfx.resume();
+    // Watch the store rather than having the game loop relay it: the HUD toggle
+    // is the only writer, and comparing against the bank's own state keeps the
+    // 10 Hz HUD publishes from reassigning the gain every tick.
+    const unsubscribe = appStore.subscribe(() => {
+      const next = appStore.getState().muted;
+      if (this.sfx !== null && this.sfx.isMuted() !== next) this.setMuted(next);
+    });
+
+    // An AudioContext is a scarce browser resource — Chrome allows only a
+    // handful per page — and it is not a Phaser object, so destroying the game
+    // does not reclaim it. Without this, leaving the sandbox and coming back
+    // leaks one context per visit and audio silently dies after a few rounds.
+    // React StrictMode mounts the session twice in development, so the leak
+    // shows up immediately rather than eventually.
+    const release = (): void => {
+      unsubscribe();
+      this.sfx?.destroy();
+      this.sfx = null;
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, release);
+    this.events.once(Phaser.Scenes.Events.DESTROY, release);
+    this.input.on('pointerdown', () => {
+      this.sfx?.resume();
+    });
+    this.input.keyboard?.on('keydown', () => {
+      this.sfx?.resume();
+    });
+  }
+
+  /** Apply a mute change from the HUD toggle. */
+  setMuted(muted: boolean): void {
+    this.sfx?.setMuted(muted);
+    if (!muted) this.sfx?.resume();
+  }
+
+  /**
+   * Play a world-positioned sound, attenuated and panned relative to the local
+   * player. Distant events still resolve their visuals but cost no audio node.
+   */
+  private sfxAt(id: SfxId, worldX: number, worldY: number, volume = 1, rate = 1): void {
+    const bank = this.sfx;
+    if (bank === null) return;
+    const p = this.world.players;
+    const i = this.localPlayer;
+    const spatial = SoundBank.spatial(p.posX[i] ?? 0, p.posY[i] ?? 0, worldX, worldY);
+    bank.play(id, { volume: spatial.volume * volume, pan: spatial.pan, rate });
+  }
+
+  /**
+   * Small deterministic pitch wobble per event, so repeated shots do not sound
+   * like one sample retriggering. Derived from tick and player index rather than
+   * `Math.random`, keeping the renderer free of hidden nondeterminism.
+   */
+  private static wobble(tick: number, who: number): number {
+    return 1 + (((tick * 37 + who * 11) % 7) - 3) * 0.014;
+  }
 
   private buildTiles(): void {
     // Sized to the viewport, never to the map: Outpost Delta has 17k tiles and
@@ -250,7 +341,7 @@ export class ArenaScene extends Phaser.Scene {
     this.cameraTarget = this.add.rectangle(0, 0, 2, 2, 0, 0);
     this.cameras.main.setBounds(0, 0, map.width * PX_PER_M, map.height * PX_PER_M);
     this.cameras.main.startFollow(this.cameraTarget, false, 0.12, 0.12);
-    this.cameras.main.setBackgroundColor('#0b1020');
+    this.cameras.main.setBackgroundColor('#43514a'); // misty ridge haze (ADR-020)
     this.applyZoom();
   }
 
@@ -517,12 +608,24 @@ export class ArenaScene extends Phaser.Scene {
    */
   emitTickEffects(world: SimWorld): void {
     const p = world.players;
+    // One looping thruster voice for the whole arena, driven by the loudest
+    // audible jetpack. Distance-weighting it means a fight overhead is heard
+    // without paying for a loop per player.
+    let jet = 0;
     for (let i = 0; i < MAX_PLAYERS; i++) {
       if (p.connected[i] !== 1 || p.status[i] !== 1) continue;
       const cmd = world.inputs[i];
       if (cmd === undefined || (cmd.buttons & Buttons.Thrust) === 0 || (p.fuel[i] ?? 0) <= 0) {
         continue;
       }
+      const listener = this.localPlayer;
+      const heard = SoundBank.spatial(
+        p.posX[listener] ?? 0,
+        p.posY[listener] ?? 0,
+        p.posX[i] ?? 0,
+        p.posY[i] ?? 0,
+      ).volume;
+      if (heard > jet) jet = heard;
       // Hover (thrust + down input, ADR-011) idles the jets at half density.
       const hovering = cmd.moveY > 0.5 && p.grounded[i] !== 1;
       if (hovering && world.tick % 2 === 0) continue;
@@ -532,6 +635,7 @@ export class ArenaScene extends Phaser.Scene {
       const y = (p.posY[i] ?? 0) * PX_PER_M + 4;
       this.jetEmitter.emitParticleAt(x, y, 1);
     }
+    this.sfx?.setJet(jet);
   }
 
   /** Called once per sim tick with that tick's events. */
@@ -542,6 +646,13 @@ export class ArenaScene extends Phaser.Scene {
           const aim = world.players.aim[ev.a] ?? 0;
           const mx = (ev.x + Math.cos(aim) * 0.75) * PX_PER_M;
           const my = (ev.y + Math.sin(aim) * 0.75) * PX_PER_M;
+          this.sfxAt(
+            SHOT_SFX[ev.b] ?? SfxId.ShotLight,
+            ev.x,
+            ev.y,
+            1,
+            ArenaScene.wobble(world.tick, ev.a),
+          );
           const flash = this.add.image(mx, my, ATLAS, Frames.Muzzle).setDepth(9);
           this.tweens.add({
             targets: flash,
@@ -564,6 +675,7 @@ export class ArenaScene extends Phaser.Scene {
         case SimEventType.Explosion: {
           const x = ev.x * PX_PER_M;
           const y = ev.y * PX_PER_M;
+          this.sfxAt(SfxId.Explosion, ev.x, ev.y, 1, ArenaScene.wobble(world.tick, ev.a));
           this.explosionEmitter.explode(26, x, y);
           if (this.rings.length >= MAX_RINGS) this.rings.shift();
           this.rings.push({ x, y, radius: ev.r * PX_PER_M, ttl: 320, maxTtl: 320 });
@@ -571,6 +683,7 @@ export class ArenaScene extends Phaser.Scene {
           break;
         }
         case SimEventType.Death: {
+          this.sfxAt(SfxId.Death, ev.x, ev.y);
           this.deathEmitter.explode(22, ev.x * PX_PER_M, ev.y * PX_PER_M);
           this.spawnDeathDebris(
             ev.x * PX_PER_M,
@@ -580,16 +693,41 @@ export class ArenaScene extends Phaser.Scene {
           break;
         }
         case SimEventType.GrenadeBounce: {
+          this.sfxAt(SfxId.GrenadeBounce, ev.x, ev.y, 0.7, ArenaScene.wobble(world.tick, ev.a));
           this.explosionEmitter.explode(2, ev.x * PX_PER_M, ev.y * PX_PER_M);
           break;
         }
         case SimEventType.PickupTaken: {
+          this.sfxAt(SfxId.PickupTaken, ev.x, ev.y);
           this.pickupEmitter.explode(14, ev.x * PX_PER_M, ev.y * PX_PER_M);
           break;
         }
         case SimEventType.PickupSpawn: {
           // A soft puff announces a pad refilling, so players notice restocks.
+          this.sfxAt(SfxId.PadRespawn, ev.x, ev.y, 0.8);
           this.pickupEmitter.explode(8, ev.x * PX_PER_M, ev.y * PX_PER_M);
+          break;
+        }
+        // Audio-only events: the sim already reported these, but until now
+        // nothing consumed them, so a reload or a dry trigger was invisible AND
+        // inaudible. Melee in particular fired with no feedback at all.
+        case SimEventType.HitConfirmed: {
+          // Hitmarker is listener-local feedback, so it is never attenuated —
+          // but only for shots the local player actually landed.
+          if (ev.a === this.localPlayer) this.sfx?.play(SfxId.Hit, { volume: 0.6 });
+          break;
+        }
+        case SimEventType.ReloadStart: {
+          this.sfxAt(SfxId.Reload, ev.x, ev.y, 0.9);
+          break;
+        }
+        case SimEventType.DryFire: {
+          this.sfxAt(SfxId.DryFire, ev.x, ev.y, 0.8);
+          break;
+        }
+        case SimEventType.MeleeSwing:
+        case SimEventType.GrenadeThrow: {
+          this.sfxAt(SfxId.Whoosh, ev.x, ev.y, 0.9, ArenaScene.wobble(world.tick, ev.a));
           break;
         }
         default:

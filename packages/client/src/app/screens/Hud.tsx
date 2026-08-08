@@ -19,6 +19,7 @@ export function Hud(): ReactElement {
   const scoped = useAppState((s) => s.scoped);
   const scopeZoom = useAppState((s) => s.scopeZoom);
   const weaponIcons = useAppState((s) => s.weaponIcons);
+  const muted = useAppState((s) => s.muted);
   const icon = weaponIcons[hud.weaponId];
   const otherIcon = weaponIcons[hud.otherWeaponId];
 
@@ -86,6 +87,18 @@ export function Hud(): ReactElement {
           K {hud.kills} · D {hud.deaths}
         </div>
         <div className="scorebox">{hud.fps} FPS</div>
+        <button
+          type="button"
+          className={`scorebox mute-toggle${muted ? ' muted' : ''}`}
+          aria-pressed={muted}
+          aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+          onPointerDown={(e) => {
+            e.preventDefault(); // keep keyboard focus on the game
+            appStore.toggleMute();
+          }}
+        >
+          {muted ? 'SOUND OFF' : 'SOUND ON'}
+        </button>
       </div>
 
       <button

@@ -1,7 +1,8 @@
 # Rendering Architecture
 
 Aerocade's renderer is a deliberately thin layer: Phaser 3.87 is used **only** as a WebGL
-renderer, audio mixer, and raw input surface, while all game state lives in the deterministic
+renderer and raw input surface — sound is a separate Web Audio graph we own
+([ADR-021](DECISIONS.md)) — while all game state lives in the deterministic
 simulation in `packages/shared` (see [architecture.md](architecture.md) and
 [ecs.md](ecs.md)). The render layer never mutates sim state; each animation frame it reads the
 two most recent tick states, interpolates them by the accumulator alpha, and pushes the result
@@ -32,7 +33,7 @@ What Phaser _does_ own:
 | ---------------- | ------------------------------------------------------------------------- |
 | WebGL rendering  | sprites, tilemap layers, particle emitters, `Graphics` for beams          |
 | Texture registry | procedural `CanvasTexture`s generated in `BootScene`                      |
-| Audio            | Web Audio via Phaser sound manager; clips are generated, not loaded       |
+| Audio            | _none_ — Phaser runs `noAudio: true`; sound is our own graph (ADR-021)    |
 | Raw input events | keyboard/pointer/Gamepad API events, forwarded to the shared input mapper |
 | Cameras          | follow, bounds clamp, shake, parallax scroll factors                      |
 

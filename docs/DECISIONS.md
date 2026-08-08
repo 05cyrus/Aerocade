@@ -459,6 +459,45 @@ allocates no nodes at all. Volume settings and persistence wait for the settings
 Not done: no footstep, landing or impact sounds; no music; no per-material impact variation; no
 audio for remote players' reloads distinguishable from your own.
 
+## ADR-022: Touch controls merge with the keyboard, and the aim stick owns aim
+
+The mobile twin-stick layer specified in `docs/ui.md` §5 is now built. Three decisions were not
+obvious from the spec.
+
+**The aim stick must override pointer aim explicitly.** The scene composed aim from
+`this.input.activePointer` through the camera, which is correct for a mouse. On a touchscreen the
+"active pointer" is whichever finger moved last, so dragging the MOVE stick swung the player's aim.
+`TouchInput` therefore reports an aim angle that is `null` when the stick is idle, and the game
+loop prefers it over the pointer only while it is engaged.
+
+**Touch is merged with keyboard input, not switched to.** Buttons are OR'd and each axis takes
+whichever source is actually deflected. A tablet with a keyboard, or a phone player tapping a HUD
+button mid-run, must never have one source cancel the other.
+
+**The sticks live outside React state.** Deflection is read at 60 Hz; putting it in the store would
+re-render the HUD on the game loop's schedule, which `docs/ui.md` §4 forbids. So `touchInput` is a
+module singleton the components write and the loop drains — the same shape as the existing
+`requestInteract` latch, extended from one-shot pulses to held values. Only the stick ring visuals
+are React state, and only while a stick is held.
+
+**The walk/run tiers needed rescaling, not a flag.** `moveX` is analog (`target = moveX * speedCap`)
+and `Buttons.Walk` swaps the cap. Setting Walk below the 0.55 threshold and passing raw deflection
+makes speed _fall_ as the thumb pushes further — 0.54 × 4.2 = 2.3 m/s, then 0.56 × 7.4 = 4.1 m/s.
+`moveAxis` instead rescales per tier so the walk band spans 0 → walkSpeed and the run band
+continues walkSpeed → runSpeed. A test asserts speed rises monotonically across the whole travel,
+which is the property the spec's "matching the 4.2 / 7.4 tiers" actually implies.
+
+**Tested as maths, verified as touches.** The formulas — deadzone re-normalisation, follow-mode
+re-anchoring, fire hysteresis, tier continuity — are pure functions in `input/stick.ts` with 21
+unit tests, because the alternative is testing them by hand on a device. The wiring was then driven
+with synthetic multi-touch through CDP on an emulated phone: small deflection walks with the Walk
+bit set, full deflection runs without it, releasing returns `moveX` to exactly 0, the jetpack button
+climbs, and with **both thumbs down** the aim stick fires straight up while the move stick holds
+full deflection — the cross-wiring case that pointer-id routing exists to prevent.
+
+Not done: no grenade hold-power arc, no left-handed mirror, no layout-scale or sensitivity setting
+(all wait on the settings screen), and Gamepad API support is still open.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

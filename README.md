@@ -31,7 +31,8 @@ Honest status per milestone (full plan in [docs/roadmap.md](docs/roadmap.md)):
 | Full roster + lag compensation                                            | M3        | Partial — 7 weapons, grenades, melee, health/ammo pads done; Arclight Beam, Emberjet and lag comp remain |
 | Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen    | M4        | Planned                                                                                                  |
 | Procedurally generated sound: weapons, explosions, jetpack loop, mute     | M5        | Done                                                                                                     |
-| Mobile twin-stick controls, Gamepad API, settings screen                  | M5        | Planned                                                                                                  |
+| Mobile twin-stick touch controls (dynamic sticks, button cluster)         | M5        | Done                                                                                                     |
+| Gamepad API, settings screen (volume, keybinds, layout scale)             | M5        | Planned                                                                                                  |
 | PWA polish, more maps, moving platforms/jump pads, perf hardening         | M6        | Planned                                                                                                  |
 | AI opponents, Survival waves, Training mode                               | M7        | Planned                                                                                                  |
 | Release hardening: soak tests, docs completion, packaging                 | M8        | Planned                                                                                                  |

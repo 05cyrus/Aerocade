@@ -716,3 +716,106 @@ body,
 .mute-toggle.muted {
   opacity: 0.45;
 }
+
+/* ---------- mobile twin-stick control layer (docs/ui.md §5) ---------- */
+
+/* touch-action: none is load-bearing — without it the browser claims drags for
+   scroll/zoom and the sticks stutter or stop mid-swipe. Safe-area insets keep
+   thumbs clear of notches and home indicators. */
+.touch-layer {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Left 40% moves, right 40% aims, centre 20% grabs nothing. */
+.touch-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  pointer-events: auto;
+  touch-action: none;
+}
+.touch-zone-move {
+  left: 0;
+  padding-left: env(safe-area-inset-left);
+}
+.touch-zone-aim {
+  right: 0;
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Rings are drawn at the finger, so they are positioned from their centre. */
+.stick-ring,
+.stick-dead,
+.stick-knob {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.stick-ring {
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+}
+.stick-dead {
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+}
+.stick-knob {
+  width: 46px;
+  height: 46px;
+  background: rgba(255, 255, 255, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+/* Button cluster: right edge, above the aim zone, 56px minimum targets. */
+.touch-cluster {
+  position: absolute;
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(2, 56px);
+  gap: 10px;
+  pointer-events: none;
+}
+.touch-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: rgba(20, 26, 24, 0.55);
+  color: #e8efe9;
+  font-size: 22px;
+  line-height: 1;
+  pointer-events: auto;
+  touch-action: none;
+}
+.touch-btn:active {
+  background: rgba(120, 140, 120, 0.7);
+}
+
+/* Portrait: the manifest asks for landscape (ADR-007); where the browser
+   ignores it, block play rather than hand the player an unusable layout.
+   Base rule FIRST — with the media query above it, the later `display: none`
+   won on equal specificity and the prompt could never appear. */
+.rotate-prompt {
+  display: none;
+}
+@media (orientation: portrait) {
+  .rotate-prompt {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-content: center;
+    gap: 12px;
+    text-align: center;
+    background: #121714;
+    color: #e8efe9;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
+}

@@ -19,6 +19,7 @@ import {
 } from '@aerocade/shared';
 import { appStore, type HudState } from '../app/store.js';
 import { KeyboardMouseInput } from './input/KeyboardMouseInput.js';
+import { touchInput } from './input/TouchInput.js';
 import { ArenaScene, type SceneDriver } from './render/ArenaScene.js';
 import { RenderInterpolator } from './render/RenderInterpolator.js';
 
@@ -134,12 +135,19 @@ export class GameSession implements SceneDriver {
     if (scene === null) return;
 
     const sampled = this.input.sample();
+    // Touch is merged rather than switched to: a tablet with a keyboard, or a
+    // phone user tapping a HUD button mid-run, must not have one source cancel
+    // the other. Axes take whichever source is actually deflected.
+    const touch = touchInput.sample();
+    const moveX = touch.moveX !== 0 ? touch.moveX : sampled.moveX;
+    const moveY = touch.moveY !== 0 ? touch.moveY : sampled.moveY;
     // The on-screen pickup button feeds the same input path as the E key, so
     // the simulation cannot tell tap from keypress.
     // Both on-screen buttons feed the normal input path, so the simulation
     // cannot tell a tap from a keypress.
     const buttons =
       sampled.buttons |
+      touch.buttons |
       (appStore.consumeInteract() ? Buttons.Interact : 0) |
       (appStore.consumeWeaponSwitch() ? Buttons.SwitchWeapon : 0);
     // Scope is presentation: the Z key and the on-screen button both flip a
@@ -150,11 +158,14 @@ export class GameSession implements SceneDriver {
     const buttonToggled = appStore.consumeScopeToggle();
     if (keyToggled !== buttonToggled) this.scoped = !this.scoped;
     scene.setScoped(this.scoped);
-    this.lastAim = scene.computeAimFor(this.localPlayer, this.interp);
+    // The aim stick overrides pointer aim while it is engaged. Without this the
+    // scene would aim at `activePointer`, which on a touchscreen is whichever
+    // finger moved last — so driving the MOVE stick would swing your aim.
+    this.lastAim = touch.aim ?? scene.computeAimFor(this.localPlayer, this.interp);
     setInput(this.world, this.localPlayer, {
       seq: this.world.tick,
-      moveX: sampled.moveX,
-      moveY: sampled.moveY,
+      moveX,
+      moveY,
       aim: this.lastAim,
       buttons,
     });

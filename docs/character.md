@@ -13,8 +13,14 @@ Aerocade ships **no image files**. All art is generated in code at boot into one
 ([ADR-001](DECISIONS.md#adr-001-product-identity) originality,
 [ADR-012](DECISIONS.md#adr-012-articulated-character-rig-drawn-from-a-single-atlas) one texture).
 The reference sheets are therefore a **specification the drawing code must satisfy**, not assets
-to import. They are not in the repo and must not be added to it — this file is the durable
-record, and it is what a reviewer checks a rig change against.
+to import — nothing under `assets/` is loaded at runtime, and nothing there may ever be.
+
+The weapon sheets live in `assets/` as design source. Note that folder is **not** in
+`.gitignore`, so those PNGs are committed: harmless for originality (they are original concept
+art, not third-party assets, and they never ship in the bundle) but worth a deliberate decision
+rather than an accident — either gitignore `assets/` or record it here as tracked design source.
+This file is the durable record either way, and it is what a reviewer checks an art change
+against.
 
 The reference is labelled as an homage to a specific commercial title. ADR-001 allows being
 _inspired by the feel_ of 2014–2018 jetpack arena shooters and forbids sharing assets or copying
@@ -79,9 +85,19 @@ And boot soles are neutral **grey**, not another olive-dark: at a 20 px leg a ne
 under a near-black-outlined trouser merges into one shape, and the grey sole is what makes the
 boot read as a boot.
 
-Reference swatches not yet used anywhere: brown `#5a3f28` (grips, slings) and light grey
-`#9a9a9a` (blade steel). Both belong to weapon art, which is still on the old palette — see
-collision 4 below.
+### Weapons
+
+The guns share the character's ink and olive and add neutral greys plus brown furniture. Nothing
+in the weapon palette is blue — that was the whole problem with the art this replaced.
+
+| Role         | Hex       | Constant      | Where it goes                        |
+| ------------ | --------- | ------------- | ------------------------------------ |
+| Steel        | `#44474b` | `STEEL`       | receivers, bodies, barrels           |
+| Steel shadow | `#2d3033` | `STEEL_DARK`  | bores, vent slots, panel cutouts     |
+| Steel edge   | `#6b7075` | `STEEL_LIGHT` | top highlights along tubes and rails |
+| Chrome       | `#9a9a9a` | `CHROME`      | muzzle faces, mag baseplates, bolts  |
+| Brown        | `#6d4a2c` | `WOOD`        | grips, handguards, stocks, pumps     |
+| Brown shadow | `#53381f` | `WOOD_SHADE`  | undersides of brown furniture        |
 
 ## Parts, mapped to atlas frames
 
@@ -137,14 +153,22 @@ which is what the hero pose and every pose on the plan sheet use. The expression
 authority for UI portraits _if_ the project ever grows menu/scoreboard portraits (it has none
 today; the HUD is React DOM with no character art).
 
-**4. The weapon sheet is real-world firearms — and the guns are still off-palette.** The
-reference guns are recognizable products (M4-pattern carbine, MP5, AWP-style sniper, LAW tube).
-ADR-001 rules that out, and the roster is seven _original_ weapons.
-→ **Open.** The seven weapon frames still use the old blue-slate `GUNMETAL` with cyan accents,
-which now visibly clashes with the olive soldier holding them — it is the most off-model thing in
-any gameplay frame. The fix is a palette pass, **not** new silhouettes: adopt the reference's
-rendering language (thick ink outline, flat neutral gunmetal, one highlight, brown grips, muzzle
-pointing right) and keep Aerocade's own shapes. The reference sheet is a size/heft guide only:
+**4. Weapon art must stay original — and must survive 23×11 px.** The _first_ weapon sheet was
+recognizable real firearms (M4-pattern carbine, MP5, AWP-style sniper, LAW tube), which ADR-001
+rules out. The sheets now in `assets/` are original invented designs in the character's own
+language, and the seven frames are drawn from them.
+→ **Decision:** silhouettes and palette come from `assets/`; the old blue-slate `GUNMETAL` with
+cyan accents is gone. Because a rifle frame renders at about **23×11 px** in the player's hands,
+each gun keeps only its silhouette plus the few masses that identify it — olive side panel, brown
+grip and furniture, magazine, and whatever sits at the muzzle. The reference art's screws, panel
+lines, rail teeth and lettering cannot resolve and are deliberately dropped.
+
+One gap: **the Scattergun has no reference sheet.** `assets/Scattergun.png` is the Pulse Rifle's
+carbine — box magazine, rail optic, muzzle brake, no pump and no bell — so it was used for
+`Frames.PulseRifle`, and the Scattergun is drawn to the set's language from its design brief
+(wide bell muzzle, pump slide, tube magazine, short and heavy). Replace it when real art lands.
+
+The reference sheet is a size/heft guide, one entry per roster slot:
 
 | Roster weapon                       | Reference heft |
 | ----------------------------------- | -------------- |
@@ -168,15 +192,22 @@ so each sheet entry becomes tuning, not a new sprite.
 | Standing / idle             | grounded, `speed ≤ 0.5` — `LEG_IDLE_SPLAY` | exists                             |
 | Moving / running (4 frames) | grounded run cycle, torso lean, run bob    | exists                             |
 | Crouch idle / walk / shoot  | —                                          | **no crouch in the sim**           |
-| Melee attack 1–3            | —                                          | **no melee in the roster**         |
+| Melee attack 1–3            | — (but see below)                          | **buildable, not built**           |
 | Front / back turnaround     | —                                          | N/A: side-scroller, side view only |
 
-Two honest gaps: crouching and melee are on the reference sheet but **do not exist in the
-simulation**, and art cannot add them — they would need sim state (a crouch hull, a melee
-weapon). Treat those sheet sections as forward-looking, not as a spec the renderer is currently
-failing. Conversely the front/back/¾ turnaround views will never be drawn: the game is a
-side-scroller and the rig mirrors on `scaleX = ±1`. They are identity references for the artist,
-not frames to produce.
+The two gaps are not the same kind of gap. **Crouching genuinely does not exist**: there is no
+crouch button, no crouched hull, nothing for art to read, so that sheet section is forward-looking
+and the renderer is not failing a spec by ignoring it.
+
+**Melee, however, is already in the sim** — `Buttons.Melee`, a `TUNING.melee` cooldown, and a
+`MeleeSwing` FX event carrying whether the swing connected
+([weapons.ts](../packages/shared/src/sim/systems/weapons.ts)). It is an unarmed strike rather than
+a roster weapon, so the reference's knife is off-model for it, but a swing pose driven off that
+event is buildable today and is the most faithful pose still missing. (`roadmap.md` names the
+melee _Spanner Strike_.)
+
+The front/back/¾ turnaround views will never be drawn: the game is a side-scroller and the rig
+mirrors on `scaleX = ±1`. They are identity references for the artist, not frames to produce.
 
 One fidelity gap the renderer _could_ close: the reference grips every long gun with **two
 hands**, and the rig has a single arm. A second arm on the foregrip is one more sprite per rig

@@ -41,7 +41,7 @@ export const PLAYER_COLORS: readonly number[] = [
  *
  * The uniform is deliberately NOT tintable. Phaser tint multiplies, so an
  * olive base under a saturated team color goes muddy — player color lives on
- * the insignia and helmet band instead, which are drawn on TEAM_BASE.
+ * the insignia and helmet pad instead, which are drawn on TEAM_BASE.
  */
 const INK = 0x23241d; // outlines, face mask, vest, gloves, boots
 const OLIVE = 0x6b7040; // the uniform — dominant color
@@ -50,8 +50,17 @@ const GEAR = 0x33352a; // pads and pouches: a step off ink so they still read
 const HARD_GREY = 0x3f3f3f; // boot soles and buckles — neutral, never blue
 const SKIN = 0xf0c088; // exposed eye band and fingertips
 const EYE_WHITE = 0xf2efe4;
-const GUNMETAL = 0x2c3346;
-const GUNMETAL_LIGHT = 0x4a5470;
+/**
+ * Weapon palette. Neutral greys — never blue — so the guns sit in the same
+ * world as the olive soldier holding them, with olive panels and brown
+ * furniture picked straight off the character (docs/character.md).
+ */
+const STEEL = 0x44474b; // receiver and body
+const STEEL_DARK = 0x2d3033; // bores, vent slots, shadow
+const STEEL_LIGHT = 0x6b7075; // top edges and highlights
+const CHROME = 0x9a9a9a; // muzzle faces, mag baseplates, bolts
+const WOOD = 0x6d4a2c; // grips, handguards, stocks
+const WOOD_SHADE = 0x53381f;
 /** Near-white base for the only two team-tinted parts. */
 const TEAM_BASE = 0xf2f4f8;
 
@@ -440,80 +449,448 @@ function drawHelmetPad(g: Phaser.GameObjects.Graphics, ox: number, oy: number): 
 }
 
 // ---------- weapons (original silhouettes, muzzle pointing right) ----------
+//
+// Drawn from the reference sheets in assets/, in the same language as the
+// soldier: ink silhouette first, flat fills inset, olive side panels, brown
+// furniture, neutral grey metal. Frame aspect ratios already match the
+// reference art, so only the contents are reference-driven.
+//
+// These are drawn at 2× and rendered at RIG_SCALE, so a 46×22 rifle is about
+// 23×11 px in the player's hands. That is the whole design constraint: the
+// reference art's screws, panel lines and rail teeth cannot survive, so each
+// gun keeps only its silhouette plus the handful of masses that identify it —
+// olive panel, brown grip, magazine, and whatever sits at the muzzle.
 
+/** A parallelogram, from two triangles — the SMG shroud's slanted vents. */
+function slantBar(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  skew: number,
+): void {
+  g.fillTriangle(x + skew, y, x + skew + w, y, x + w, y + h);
+  g.fillTriangle(x + skew, y, x + w, y + h, x, y + h);
+}
+
+/** Three short vent slashes, the set's recurring panel detail. */
+function ventSlashes(g: Phaser.GameObjects.Graphics, x: number, y: number, h: number): void {
+  g.fillRect(x, y, 0.9, h);
+  g.fillRect(x + 1.6, y, 0.9, h);
+  g.fillRect(x + 3.2, y, 0.9, h);
+}
+
+/**
+ * Rivet Pistol: an industrial rivet driver — ribbed collar, slotted nose.
+ *
+ * Everything is inset ~1 px from the frame edge. Drawn flush the gun lost its
+ * ink border on three sides and read as clipped rather than small.
+ */
 function drawPistol(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
-  g.fillStyle(GUNMETAL, 1);
-  g.fillRoundedRect(ox, oy, 22, 9, 3); // slide
-  g.fillRoundedRect(ox + 2, oy + 7, 8, 12, 3); // grip
-  g.fillStyle(GUNMETAL_LIGHT, 1);
-  g.fillRect(ox + 16, oy + 1, 6, 3);
-}
-
-function drawSmg(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
-  g.fillStyle(GUNMETAL, 1);
-  g.fillRoundedRect(ox, oy + 2, 30, 10, 3); // body
-  g.fillRect(ox + 28, oy + 4, 8, 5); // stub barrel
-  g.fillRoundedRect(ox + 12, oy + 10, 8, 14, 2); // magazine
-  g.fillStyle(GUNMETAL_LIGHT, 1);
-  g.fillRect(ox + 4, oy, 10, 3); // top rail
-  g.fillStyle(0x3cd6ff, 0.8);
-  g.fillRect(ox + 24, oy + 4, 2, 4); // cell glow
-}
-
-function drawRifle(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
-  g.fillStyle(GUNMETAL, 1);
-  g.fillRoundedRect(ox + 4, oy + 2, 34, 9, 3); // body
-  g.fillRect(ox + 36, oy + 4, 10, 5); // barrel
-  g.fillRoundedRect(ox, oy + 3, 6, 12, 2); // stock
-  g.fillRoundedRect(ox + 16, oy + 10, 7, 12, 2); // magazine
-  g.fillStyle(GUNMETAL_LIGHT, 1);
-  g.fillRect(ox + 10, oy, 16, 3); // rail
-  g.fillStyle(0x3cd6ff, 0.8);
-  g.fillRect(ox + 32, oy + 4, 2, 5);
-}
-
-function drawScattergun(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
-  g.fillStyle(GUNMETAL, 1);
-  g.fillRoundedRect(ox, oy + 3, 38, 12, 4); // receiver
-  g.fillStyle(GUNMETAL_LIGHT, 1);
-  g.fillRect(ox + 26, oy + 5, 14, 3); // upper tube
-  g.fillRect(ox + 26, oy + 10, 14, 3); // lower tube
-  g.fillStyle(0xffa03c, 1);
-  g.fillRoundedRect(ox + 14, oy + 15, 12, 6, 2); // pump grip
-}
-
-function drawLongbolt(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
-  g.fillStyle(GUNMETAL, 1);
-  g.fillRoundedRect(ox + 2, oy + 4, 30, 8, 3); // receiver
-  g.fillRect(ox + 30, oy + 6, 26, 4); // long barrel
-  g.fillRoundedRect(ox, oy + 5, 5, 11, 2); // stock
-  g.fillRect(ox + 54, oy + 5, 3, 6); // muzzle brake
-  g.fillStyle(GUNMETAL_LIGHT, 1);
-  g.fillRoundedRect(ox + 12, oy, 14, 5, 2); // scope
-  g.fillStyle(0x3cd6ff, 0.9);
-  g.fillRect(ox + 24, oy + 1, 2, 3); // lens
-}
-
-function drawThumper(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
-  g.fillStyle(GUNMETAL, 1);
-  g.fillRoundedRect(ox, oy + 2, 44, 14, 6); // tube
-  g.fillStyle(GUNMETAL_LIGHT, 1);
-  g.fillRoundedRect(ox + 38, oy, 10, 18, 5); // muzzle ring
   g.fillStyle(INK, 1);
-  g.fillCircle(ox + 43, oy + 9, 5); // bore
-  g.fillStyle(0xffa03c, 1);
-  g.fillRect(ox + 8, oy + 4, 4, 10); // hazard stripes
-  g.fillRect(ox + 16, oy + 4, 4, 10);
+  g.fillRoundedRect(ox + 1, oy + 0.5, 17, 10.5, 2); // receiver
+  g.fillRoundedRect(ox + 14.5, oy + 1.5, 8.5, 8, 2); // driver assembly
+  g.fillRoundedRect(ox + 2.5, oy + 8.5, 8, 11, 2); // grip and magazine
+
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 2.5, oy + 2, 14, 7.5, 1.5);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 3, oy + 2, 13, 1.1);
+
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 3.5, oy + 3.2, 10.5, 4.6, 1);
+  g.fillStyle(OLIVE_SHADE, 1);
+  g.fillRect(ox + 3.5, oy + 6.8, 10.5, 1);
+  g.fillStyle(STEEL_DARK, 1);
+  ventSlashes(g, ox + 4.4, oy + 4.1, 2.8);
+  g.fillRoundedRect(ox + 8.8, oy + 4.3, 4.6, 1.9, 0.8); // ejection port
+  g.fillStyle(CHROME, 1);
+  g.fillRect(ox + 11.6, oy + 4.5, 1.7, 1.5); // bolt
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 3.5, oy + 9.2, 6, 6.6, 1.4);
+  g.fillStyle(WOOD_SHADE, 1);
+  g.fillRect(ox + 3.5, oy + 13, 6, 1);
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 3, oy + 15, 5.6, 4.2, 1);
+  g.fillStyle(CHROME, 1);
+  g.fillRect(ox + 2.8, oy + 18.2, 6, 1.2); // baseplate
+
+  // Driver head: grey collar, ribbed olive drum, slotted nose.
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 15, oy + 2.2, 3.2, 6.2, 1);
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 17.8, oy + 2.2, 3.4, 6.2, 0.8);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRect(ox + 18.6, oy + 2.2, 0.7, 6.2);
+  g.fillRect(ox + 19.8, oy + 2.2, 0.7, 6.2);
+  g.fillStyle(CHROME, 1);
+  g.fillRoundedRect(ox + 20.9, oy + 2.8, 2, 5, 0.9);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRect(ox + 21.9, oy + 4.3, 1, 1.9); // bore
 }
 
+/** Vortex SMG: spiral-vented shroud, long curved magazine, folding stock. */
+function drawSmg(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  g.fillStyle(INK, 1);
+  g.fillRoundedRect(ox + 8, oy + 1.5, 4, 3, 0.8); // rear sight
+  g.fillRoundedRect(ox + 20, oy + 1.5, 2.5, 3, 0.8); // front post
+  g.fillRoundedRect(ox + 1, oy + 5, 4.5, 7, 1); // folded stock
+  g.fillRoundedRect(ox + 4, oy + 3.5, 20, 10, 2); // receiver
+  g.fillRoundedRect(ox + 22, oy + 4, 14, 8, 2); // shroud
+  g.fillRoundedRect(ox + 9, oy + 11, 6.5, 7, 1.5); // grip
+  g.fillRoundedRect(ox + 16, oy + 11, 7, 8, 1.5); // magazine, upper
+  g.fillRoundedRect(ox + 18, oy + 15.5, 7, 7.5, 1.5); // magazine, curve
+
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 1.5, oy + 5.5, 3.5, 6, 0.8);
+  g.fillRoundedRect(ox + 5, oy + 4.5, 18, 8, 1.5);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 5.5, oy + 4.5, 17, 1.2);
+
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 6.5, oy + 5.5, 13, 6, 1);
+  g.fillStyle(OLIVE_SHADE, 1);
+  g.fillRect(ox + 6.5, oy + 10.5, 13, 1);
+  g.fillStyle(STEEL_DARK, 1);
+  ventSlashes(g, ox + 7.5, oy + 6.5, 3);
+  g.fillRoundedRect(ox + 12.5, oy + 7, 5.5, 2, 0.8);
+  g.fillStyle(CHROME, 1);
+  g.fillRect(ox + 16, oy + 7.2, 1.8, 1.6);
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 9.5, oy + 11.5, 5.5, 6, 1.2);
+  g.fillStyle(WOOD_SHADE, 1);
+  g.fillRect(ox + 9.5, oy + 15, 5.5, 1);
+
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 16.5, oy + 11.5, 6, 7, 1.2);
+  g.fillRoundedRect(ox + 18.5, oy + 15.5, 6, 7, 1.2);
+  g.fillStyle(OLIVE, 1);
+  g.fillRect(ox + 18.7, oy + 21, 5.6, 1.6); // baseplate
+
+  // Shroud: olive core showing through slanted vents.
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 23, oy + 5, 11.5, 6.5, 1);
+  g.fillStyle(OLIVE, 1);
+  g.fillRect(ox + 23.5, oy + 5.8, 10.5, 5);
+  g.fillStyle(STEEL_DARK, 1);
+  slantBar(g, ox + 24, oy + 5.8, 1.6, 5, 1.4);
+  slantBar(g, ox + 26.6, oy + 5.8, 1.6, 5, 1.4);
+  slantBar(g, ox + 29.2, oy + 5.8, 1.6, 5, 1.4);
+  slantBar(g, ox + 31.8, oy + 5.8, 1.6, 5, 1.4);
+  g.fillStyle(CHROME, 1);
+  g.fillRoundedRect(ox + 33.6, oy + 5.5, 1.8, 5.5, 0.6); // muzzle
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 24, oy + 11.5, 8, 2.5, 1); // foregrip
+}
+
+/** Pulse Rifle: the plain workhorse — rail optic, brown handguard, brake. */
+function drawRifle(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  g.fillStyle(INK, 1);
+  g.fillRoundedRect(ox + 17, oy, 4.5, 3, 0.6); // optic
+  g.fillRoundedRect(ox + 12, oy + 1.8, 18, 3, 0.6); // rail
+  g.fillRoundedRect(ox + 0.8, oy + 5, 8.4, 7, 1.5); // stock
+  g.fillRoundedRect(ox + 7, oy + 4, 20, 9, 1.5); // receiver
+  g.fillRoundedRect(ox + 25, oy + 4.5, 15, 8, 1.5); // handguard
+  g.fillRoundedRect(ox + 38, oy + 5.5, 7.2, 6, 1); // barrel and brake
+  g.fillRoundedRect(ox + 13, oy + 11, 5.5, 6, 1.2); // grip
+  g.fillRoundedRect(ox + 19, oy + 11, 6.5, 9, 1.2); // magazine
+
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 1.2, oy + 5.5, 7.6, 6, 1);
+  g.fillStyle(OLIVE_SHADE, 1);
+  g.fillRect(ox + 1.2, oy + 10, 7.6, 1.2);
+
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 8, oy + 5, 18, 7.5, 1);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 8.5, oy + 5, 17, 1);
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 9.5, oy + 5.8, 12, 5.5, 0.8);
+  g.fillStyle(OLIVE_SHADE, 1);
+  g.fillRect(ox + 9.5, oy + 10.3, 12, 1);
+  g.fillStyle(STEEL_DARK, 1);
+  ventSlashes(g, ox + 10.5, oy + 6.6, 2.6);
+  g.fillRoundedRect(ox + 15.5, oy + 7, 5, 1.8, 0.7);
+  g.fillStyle(CHROME, 1);
+  g.fillRect(ox + 18.6, oy + 7.2, 1.6, 1.4);
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 13.5, oy + 11.5, 4.5, 5.5, 1);
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 19.5, oy + 11.5, 5.5, 8, 1);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRect(ox + 21, oy + 12.5, 0.8, 6);
+  g.fillStyle(CHROME, 1);
+  g.fillRect(ox + 19.3, oy + 18.6, 5.9, 1.2);
+
+  // Handguard: brown, with the reference's two rows of oval cutouts.
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 26, oy + 5.5, 13, 6.5, 1);
+  g.fillStyle(WOOD_SHADE, 1);
+  g.fillRect(ox + 26, oy + 10.5, 13, 1);
+  g.fillStyle(STEEL_DARK, 1);
+  for (let i = 0; i < 3; i += 1) {
+    g.fillRoundedRect(ox + 27 + i * 4, oy + 6.6, 2.8, 1.2, 0.6);
+    g.fillRoundedRect(ox + 27 + i * 4, oy + 8.6, 2.8, 1.2, 0.6);
+  }
+
+  g.fillStyle(STEEL, 1);
+  g.fillRect(ox + 39, oy + 7, 4, 3);
+  g.fillStyle(CHROME, 1);
+  g.fillRoundedRect(ox + 41.2, oy + 6, 3.8, 5, 0.8);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRect(ox + 42.3, oy + 6.4, 0.8, 4.2);
+  g.fillRect(ox + 43.7, oy + 6.4, 0.8, 4.2);
+
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 12.5, oy + 2.2, 17, 2.4, 0.5);
+  g.fillRoundedRect(ox + 17.5, oy + 0.4, 3.5, 3, 0.6);
+}
+
+/**
+ * Scattergun: flared bell muzzle and a pump slide. The one gun with **no
+ * reference sheet** — assets/Scattergun.png is the Pulse Rifle's carbine art —
+ * so this is drawn to the set's established language from the design brief
+ * (wide bore, pump, tube magazine, short and heavy). Replace when art lands.
+ */
+function drawScattergun(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  g.fillStyle(INK, 1);
+  g.fillRoundedRect(ox + 14, oy + 1.5, 3.5, 3, 0.6); // bead sight
+  g.fillRoundedRect(ox + 0.8, oy + 6, 7.4, 7.5, 1.5); // stock
+  g.fillRoundedRect(ox + 6, oy + 4, 18, 10, 1.5); // receiver
+  g.fillRoundedRect(ox + 22, oy + 6, 12, 6, 1.2); // barrel and tube
+  g.fillRoundedRect(ox + 31, oy + 3, 10.2, 12, 2); // flared bell
+  g.fillRoundedRect(ox + 10, oy + 12.5, 5.5, 6, 1.2); // grip
+  g.fillRoundedRect(ox + 22, oy + 11.5, 9.5, 4.5, 1.2); // pump slide
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 1.2, oy + 6.5, 6.8, 6.5, 1);
+  g.fillStyle(WOOD_SHADE, 1);
+  g.fillRect(ox + 1.2, oy + 11.5, 6.8, 1);
+
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 6.5, oy + 5, 17, 8.5, 1);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 7, oy + 5, 16, 1.2);
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 8, oy + 6, 12.5, 6.5, 1);
+  g.fillStyle(OLIVE_SHADE, 1);
+  g.fillRect(ox + 8, oy + 11.5, 12.5, 1);
+  g.fillStyle(STEEL_DARK, 1);
+  ventSlashes(g, ox + 9, oy + 7, 3.2);
+  g.fillRoundedRect(ox + 14, oy + 7.4, 5.5, 2, 0.8);
+  g.fillStyle(CHROME, 1);
+  g.fillRect(ox + 17.4, oy + 7.6, 1.8, 1.6);
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 10.5, oy + 13, 4.5, 5.5, 1);
+  g.fillRoundedRect(ox + 22.5, oy + 12, 8.5, 3.5, 1); // pump
+  g.fillStyle(WOOD_SHADE, 1);
+  g.fillRect(ox + 22.5, oy + 14.5, 8.5, 1);
+
+  g.fillStyle(STEEL, 1);
+  g.fillRect(ox + 24, oy + 7, 8, 4);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 24, oy + 7, 8, 1);
+
+  // Bell muzzle: the pellet-spread tell.
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 31.5, oy + 3.5, 9.2, 11, 1.8);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 32, oy + 3.5, 8.7, 1.2);
+  g.fillStyle(CHROME, 1);
+  g.fillRoundedRect(ox + 37.4, oy + 4.2, 3.3, 9.6, 1.4);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRoundedRect(ox + 38.4, oy + 5.4, 2.3, 7.2, 1.2); // bore
+}
+
+/** Longbolt Rifle: long barrel, dominant scope, skeleton stock, bipod. */
+function drawLongbolt(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  g.fillStyle(INK, 1);
+  g.fillRoundedRect(ox + 14, oy, 22, 4.5, 1.5); // scope
+  g.fillRoundedRect(ox + 0.8, oy + 4, 11.2, 8, 1); // stock
+  g.fillRoundedRect(ox + 10, oy + 3.5, 14, 8, 1.2); // receiver
+  g.fillRoundedRect(ox + 22, oy + 5, 14, 6, 1); // handguard
+  g.fillRect(ox + 34, oy + 5.8, 20, 4.4); // barrel
+  g.fillRoundedRect(ox + 51, oy + 4.5, 6.2, 7, 1); // muzzle brake
+  g.fillRoundedRect(ox + 15, oy + 10, 4.5, 6, 1); // grip
+  g.fillRoundedRect(ox + 19.5, oy + 10, 4, 5.5, 0.8); // magazine
+  g.fillRoundedRect(ox + 36, oy + 9.5, 9, 2.6, 0.8); // folded bipod
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 2.2, oy + 4.5, 9.4, 7, 1);
+  g.fillStyle(WOOD_SHADE, 1);
+  g.fillRect(ox + 2.2, oy + 9.5, 9.4, 1);
+  g.fillStyle(CHROME, 1);
+  g.fillRect(ox + 1, oy + 4.5, 1.6, 7); // buttplate
+
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 10.5, oy + 4.2, 13, 6.6, 1);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 11, oy + 4.2, 12, 1);
+  g.fillStyle(CHROME, 1);
+  g.fillRect(ox + 12.5, oy + 6, 3.5, 1.2); // bolt handle
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 15.5, oy + 10.5, 3.5, 5, 0.8);
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 20, oy + 10.5, 3, 4.5, 0.6);
+
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 22.5, oy + 5.5, 13, 5, 0.8);
+  g.fillStyle(OLIVE_SHADE, 1);
+  g.fillRect(ox + 22.5, oy + 9.5, 13, 1);
+  g.fillStyle(STEEL_DARK, 1);
+  for (let i = 0; i < 4; i += 1) {
+    g.fillRoundedRect(ox + 23.5 + i * 3, oy + 7, 2, 1.1, 0.5);
+  }
+
+  g.fillStyle(STEEL, 1);
+  g.fillRect(ox + 35, oy + 6.4, 17, 3.2);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 35, oy + 6.4, 17, 0.9);
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 36.5, oy + 9.8, 8, 2, 0.6); // bipod legs
+  g.fillStyle(CHROME, 1);
+  g.fillRoundedRect(ox + 51.5, oy + 5, 5.2, 6, 0.8);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRect(ox + 52.6, oy + 5.4, 0.9, 5.2);
+  g.fillRect(ox + 54, oy + 5.4, 0.9, 5.2);
+  g.fillRect(ox + 55.4, oy + 5.4, 0.9, 5.2);
+
+  // Scope: tube with olive-tinted lenses on tall rings.
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 14.5, oy + 0.5, 21, 3.5, 1.2);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 15, oy + 0.5, 20, 1);
+  g.fillStyle(OLIVE_SHADE, 1);
+  g.fillRect(ox + 14.5, oy + 1, 2, 3);
+  g.fillRect(ox + 33.5, oy + 1, 2, 3);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRect(ox + 20, oy + 4, 1.6, 1.6); // rings
+  g.fillRect(ox + 28, oy + 4, 1.6, 1.6);
+}
+
+/** Thumper: a straight heavy tube — flat trajectory — over a 3-round drum. */
+function drawThumper(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
+  g.fillStyle(INK, 1);
+  g.fillRoundedRect(ox + 24, oy, 4.5, 3, 0.6); // optic
+  g.fillRoundedRect(ox + 0.8, oy + 3.5, 5.5, 9.5, 1.5); // shoulder pad
+  // Thick struts: at 1.4 they fell under a screen pixel and the pad read as a
+  // detached olive block floating behind the gun.
+  g.fillRect(ox + 5, oy + 5.4, 4.5, 2.4);
+  g.fillRect(ox + 5, oy + 8.8, 4.5, 2.4);
+  g.fillRoundedRect(ox + 8, oy + 3, 12, 10.5, 1.5); // receiver
+  g.fillRoundedRect(ox + 18, oy + 2.5, 26, 10.5, 2); // tube
+  g.fillRoundedRect(ox + 40.8, oy + 2.5, 6.4, 10.5, 1.5); // endcap
+  g.fillRoundedRect(ox + 11, oy + 12, 5, 6.5, 1.2); // grip
+  g.fillRoundedRect(ox + 19, oy + 10, 11.5, 10, 1.5); // drum
+
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 1.3, oy + 4, 4.5, 8.5, 1);
+  g.fillStyle(OLIVE_SHADE, 1);
+  g.fillRect(ox + 1.3, oy + 10.5, 4.5, 1.2);
+
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 8.5, oy + 3.5, 11, 9.5, 1);
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 9.5, oy + 4.5, 9, 7, 0.8);
+  g.fillStyle(STEEL_DARK, 1);
+  for (let i = 0; i < 4; i += 1) {
+    g.fillRect(ox + 10.5 + i * 1.9, oy + 5.6, 0.9, 4.5);
+  }
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 11.5, oy + 12.5, 4, 5.5, 1);
+
+  // Tube: one long mass with a top highlight, the flat-flight tell.
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 18.5, oy + 3, 23, 9.5, 1.5);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 19, oy + 3, 22, 1.4);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRect(ox + 19, oy + 11, 22, 1.2);
+
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 41.3, oy + 3, 5.6, 9.5, 1.2);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRect(ox + 42.2, oy + 4.2, 4.2, 1.2);
+  g.fillRect(ox + 42.2, oy + 7.2, 4.2, 1.2);
+  g.fillRect(ox + 42.2, oy + 10, 4.2, 1.2);
+
+  // Drum, banded in olive like the reference.
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 19.5, oy + 10.5, 10.5, 9, 1.2);
+  g.fillStyle(OLIVE, 1);
+  g.fillRect(ox + 19.5, oy + 10.5, 1.6, 9);
+  g.fillRect(ox + 28.4, oy + 10.5, 1.6, 9);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRoundedRect(ox + 21.5, oy + 12, 6.5, 1.4, 0.6);
+  g.fillRoundedRect(ox + 21.5, oy + 15, 6.5, 1.4, 0.6);
+  g.fillRoundedRect(ox + 21.5, oy + 17.6, 6.5, 1.4, 0.6);
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 24.5, oy + 0.4, 3.5, 3, 0.6); // optic
+}
+
+/** Lobber: fat 4-round drum centrepiece, wide bore, barrel canted up. */
 function drawLobber(g: Phaser.GameObjects.Graphics, ox: number, oy: number): void {
-  g.fillStyle(GUNMETAL, 1);
-  g.fillRoundedRect(ox + 4, oy + 3, 30, 10, 4); // body
-  g.fillRect(ox + 32, oy + 5, 8, 6); // muzzle
-  g.fillStyle(GUNMETAL_LIGHT, 1);
-  g.fillCircle(ox + 16, oy + 13, 8); // drum
-  g.fillStyle(INK, 0.5);
-  g.fillCircle(ox + 16, oy + 13, 4);
+  g.fillStyle(INK, 1);
+  g.fillRoundedRect(ox + 15, oy + 0.5, 3.5, 3, 0.6); // optic
+  g.fillRoundedRect(ox + 29, oy + 1, 2.5, 3.5, 0.6); // front sight
+  g.fillRoundedRect(ox + 0.8, oy + 6, 7.4, 7.5, 1.5); // stock
+  g.fillRoundedRect(ox + 6, oy + 3.5, 14, 10, 1.5); // receiver
+  g.fillRoundedRect(ox + 18, oy + 2.5, 16, 8.5, 1.5); // barrel
+  g.fillRoundedRect(ox + 31, oy + 1.5, 9, 10, 1.8); // muzzle ring
+  g.fillRoundedRect(ox + 9.5, oy + 12, 5, 6.5, 1.2); // grip
+  g.fillRoundedRect(ox + 14, oy + 8.5, 16, 15.5, 2); // drum
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 2.2, oy + 6.5, 5.9, 6.5, 1);
+  g.fillStyle(WOOD_SHADE, 1);
+  g.fillRect(ox + 2.2, oy + 11.5, 5.9, 1);
+  g.fillStyle(CHROME, 1);
+  g.fillRect(ox + 1, oy + 6.5, 1.4, 6.5); // buttpad
+
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 6.5, oy + 4, 13, 9, 1);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 7, oy + 4, 12, 1.2);
+  g.fillStyle(OLIVE, 1);
+  g.fillRoundedRect(ox + 7.5, oy + 5, 8, 6.5, 0.8);
+  g.fillStyle(STEEL_DARK, 1);
+  ventSlashes(g, ox + 8.5, oy + 6, 3.2);
+
+  g.fillStyle(WOOD, 1);
+  g.fillRoundedRect(ox + 10, oy + 12.5, 4, 5.5, 1);
+
+  // Barrel, riding high to telegraph the arc.
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 18.5, oy + 3, 14, 7.5, 1.2);
+  g.fillStyle(STEEL_LIGHT, 1);
+  g.fillRect(ox + 19, oy + 3, 13, 1.2);
+  g.fillStyle(OLIVE, 1);
+  g.fillRect(ox + 26, oy + 4.5, 4.5, 5); // mid band
+  g.fillStyle(CHROME, 1);
+  g.fillRoundedRect(ox + 31.5, oy + 2, 8, 9, 1.6);
+  g.fillStyle(STEEL_DARK, 1);
+  g.fillRoundedRect(ox + 34.5, oy + 3.4, 5, 6.2, 1.4); // wide bore
+
+  // The drum: this gun's identity, so it stays big and unbroken.
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 14.5, oy + 9, 15, 14.5, 1.8);
+  g.fillStyle(OLIVE, 1);
+  g.fillRect(ox + 14.5, oy + 9, 2, 14.5);
+  g.fillRect(ox + 27.5, oy + 9, 2, 14.5);
+  g.fillStyle(STEEL_DARK, 1);
+  for (let i = 0; i < 4; i += 1) {
+    g.fillRoundedRect(ox + 17.5, oy + 10.5 + i * 3.3, 8.5, 1.8, 0.8);
+  }
+  g.fillStyle(STEEL, 1);
+  g.fillRoundedRect(ox + 15.5, oy + 0.9, 3, 3, 0.6); // optic
 }
 
 // ---------- projectiles & effects ----------

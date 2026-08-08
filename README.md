@@ -23,6 +23,7 @@ Honest status per milestone (full plan in [docs/roadmap.md](docs/roadmap.md)):
 | Articulated soldier rig with run cycle and per-weapon held guns           | M1        | Done                                                                                                     |
 | First map: **Foundry** (48×27 tile arena) + HUD                           | M1        | Done                                                                                                     |
 | **Outpost Delta** (175×98 arena: bunker, mountains, tunnels, 6 spawns)    | M6        | Done                                                                                                     |
+| **Hollow Works** (180×92, five carved layers, 8 spawns) — the default map | M6        | Done                                                                                                     |
 | Ladders, one-way platforms, health/ammo/grenade pickups                   | M3        | Done                                                                                                     |
 | LAN bridge: static hosting, rooms, WebRTC signaling, WS relay fallback    | M2        | Partial — bridge done; browser transport next                                                            |
 | Client prediction, reconciliation, snapshot interpolation, Playwright e2e | M2        | Planned                                                                                                  |

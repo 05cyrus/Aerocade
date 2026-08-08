@@ -97,7 +97,8 @@ sim, touching only entities whose `alive` flag is set.
 
 ## Terrain: a viewport-sized window, not a map-sized display list
 
-Foundry is 48 × 27 tiles and could afford one image per solid tile. Outpost Delta is 175 × 98 —
+Foundry is 48 × 27 tiles and could afford one image per solid tile. Hollow Works — the default
+map — is 180 × 92, and Outpost Delta is 175 × 98 —
 17,150 tiles, ~4,400 of them solid — and a sprite each would put thousands of objects on the
 display list whose transforms are walked every frame no matter where the camera is.
 

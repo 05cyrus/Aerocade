@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { DEFAULT_MAP_ID, type MapId } from '@aerocade/shared';
 
 /**
  * Minimal external store bridging the game session to React (no state
@@ -8,8 +9,13 @@ import { useSyncExternalStore } from 'react';
 
 export type Screen = 'menu' | 'sandbox';
 
-/** Map the next sandbox session will load. */
-export type SelectedMap = 'foundry' | 'outpost_delta';
+/**
+ * Map the next sandbox session will load. Aliased to the shared `MapId` rather
+ * than restating the union, so adding a map to the registry cannot leave this
+ * behind — the menu is generated from `MAP_IDS`, and a stale union here would
+ * silently make a real map unselectable.
+ */
+export type SelectedMap = MapId;
 
 export interface HudState {
   health: number;
@@ -89,7 +95,7 @@ const initialHud: HudState = {
 
 let state: AppState = {
   screen: 'menu',
-  mapId: 'outpost_delta',
+  mapId: DEFAULT_MAP_ID,
   hud: initialHud,
   killFeed: [],
   pickup: null,

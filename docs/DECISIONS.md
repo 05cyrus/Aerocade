@@ -351,6 +351,52 @@ the project's own visual language. Painted parallax backgrounds and decoration p
 future milestone; `maps/outpost_delta/` holds the folder structure and a README saying which
 folders are code rather than assets.
 
+## ADR-020: Hollow Works is carved, not assembled — and traversal is tested with a player body
+
+**Hollow Works** (180 × 92 tiles, 5760 × 2944 px) is the default map, replacing Foundry as the
+level the game boots into. Foundry stays in the registry as a small fast arena and as the fixture
+the determinism, pickups and bridge suites build worlds from.
+
+**Carved, not assembled.** The whole ridge is filled solid once, then every cave, gallery, tunnel
+and shaft is _subtracted_ from it, and the skyline is cut by carving the sky down to a per-column
+deck height. This is the structural answer to "no floating platforms": a chamber is a hole in
+rock, so its floor is attached to the mass by construction. A test asserts no solid tile is
+isolated, which catches the exception — a slab whose neighbours were later stripped by a ladder or
+overwritten by a one-way platform.
+
+**Not mirrored.** Outpost Delta gets symmetry from `mirror()` (ADR-019). Hollow Works cannot: its
+reference has a natural cliff on the left and an industrial works on the right. Balance instead
+comes from paired corner spawns — S1/S2 high, S3/S4 low — plus tests for spawn spread and for no
+two spawns sharing an open row.
+
+**The physics set the scale, and they are stricter than they look.** Three numbers decided the
+geometry, and each one caused a real defect first:
+
+- **Jump rise is 1.76 m** (`8.6² / 2·21`), so a 2-tile step is impossible. Cover blocks placed two
+  tiles tall were therefore not cover but _walls_: they severed the lateral route on the layer
+  they sat on, and a walk test crossed 1.1 m of the top terrace before stopping dead. `cover()`
+  now builds a symmetric staircase and clamps its peak to what the width can ramp up to.
+- **The body is 1.65 m tall**, so it needs two open tiles. Tile flood fill happily routes through
+  a one-tile gap, so connectivity is verified with a 1×2 body that walks, falls, climbs and
+  jetpacks — not with bare tile adjacency.
+- **The jetpack climbs ~20 m**, which is generous enough to hide bad ladders. Shafts originally
+  stopped a few tiles into the band below, leaving an 8-tile air gap to the floor; the suite still
+  passed because it credits a 6-tile jetpack climb. Ladders now run surface-to-surface, and a test
+  asserts every ladder run _ends on ground_.
+
+**Verified in the running game, not only in tests.** Thirteen probe points across all five layers
+were teleported in and left to settle: all landed grounded, none stuck. Walk, jetpack and ladder
+traversal were then driven with real input. That last step mattered — a _tapped_ jump does not
+clear a 1-tile step, because `jumpCutGravityMult` 2.2 cuts a released jump short, so an early
+"the terrain is blocked" reading was the test's fault rather than the map's.
+
+**Art scope, stated plainly (as ADR-019).** The reference is a painted rocky/industrial complex.
+Hollow Works reproduces its _structure_ — five layers, arch caves, a central bridge, throats,
+tunnels, spawn and weapon placement — in the project's existing single-atlas visual language.
+Terrain still draws one tile frame, so rock, concrete and steel are not yet visually distinct;
+that needs a per-tile material channel in `MapDef` plus renderer work, and is deliberately not in
+this change.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

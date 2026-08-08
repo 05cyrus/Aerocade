@@ -15,6 +15,7 @@ export * from './sim/geometry.js';
 export * from './sim/map/mapdef.js';
 export { createFoundryMap } from './sim/map/foundry.js';
 export { createOutpostDeltaMap } from './sim/map/outpost-delta.js';
+export { createHollowWorksMap, HOLLOW_WORKS_DECKS } from './sim/map/hollow-works.js';
 export * from './sim/map/maps.js';
 export * from './sim/map/export.js';
 export * from './sim/world.js';

@@ -38,6 +38,14 @@ export function MainMenu(): ReactElement {
       <button type="button" disabled title="Arrives with milestone M2 (LAN multiplayer)">
         Join LAN Match — M2
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          appStore.setScreen('settings');
+        }}
+      >
+        Settings
+      </button>
       <div className="hint">
         <kbd>A</kbd>/<kbd>D</kbd> move · <kbd>Space</kbd> jump &amp; jetpack · <kbd>S</kbd> +{' '}
         <kbd>Space</kbd> hover · mouse aim · <kbd>LMB</kbd> fire · <kbd>RMB</kbd> melee ·{' '}

@@ -739,11 +739,13 @@ body,
   pointer-events: auto;
   touch-action: none;
 }
-.touch-zone-move {
+/* Sides are named by screen edge, not by role, so left-handed mode is a class
+   swap on the two zones rather than a second set of rules. */
+.touch-zone-left {
   left: 0;
   padding-left: env(safe-area-inset-left);
 }
-.touch-zone-aim {
+.touch-zone-right {
   right: 0;
   padding-right: env(safe-area-inset-right);
 }
@@ -777,13 +779,17 @@ body,
   right: calc(12px + env(safe-area-inset-right));
   bottom: calc(96px + env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: repeat(2, 56px);
+  grid-template-columns: repeat(2, calc(56px * var(--touch-scale, 1)));
   gap: 10px;
   pointer-events: none;
 }
+.touch-cluster.mirrored {
+  right: auto;
+  left: calc(12px + env(safe-area-inset-left));
+}
 .touch-btn {
-  width: 56px;
-  height: 56px;
+  width: calc(56px * var(--touch-scale, 1));
+  height: calc(56px * var(--touch-scale, 1));
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.4);
   background: rgba(20, 26, 24, 0.55);
@@ -818,4 +824,53 @@ body,
     font-size: 18px;
     letter-spacing: 0.08em;
   }
+}
+
+/* ---------- settings screen (docs/ui.md §6) ---------- */
+
+.settings {
+  max-height: 100vh;
+  overflow-y: auto;
+  align-items: stretch;
+  text-align: left;
+}
+.settings-group {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 6px 0;
+}
+.settings-group h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+  cursor: pointer;
+}
+.settings-row input[type='range'] {
+  width: 180px;
+}
+.settings-row output {
+  min-width: 3.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.settings-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  opacity: 0.55;
+}
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
 }

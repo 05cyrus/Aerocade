@@ -174,14 +174,13 @@ export class ArenaScene extends Phaser.Scene {
   private buildAudio(): void {
     this.sfx = SoundBank.tryCreate();
     if (this.sfx === null) return;
-    this.sfx.setMuted(appStore.getState().muted);
+    this.applyAudioSettings();
     this.sfx.resume();
     // Watch the store rather than having the game loop relay it: the HUD toggle
     // is the only writer, and comparing against the bank's own state keeps the
     // 10 Hz HUD publishes from reassigning the gain every tick.
     const unsubscribe = appStore.subscribe(() => {
-      const next = appStore.getState().muted;
-      if (this.sfx !== null && this.sfx.isMuted() !== next) this.setMuted(next);
+      this.applyAudioSettings();
     });
 
     // An AudioContext is a scarce browser resource — Chrome allows only a
@@ -205,8 +204,14 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
-  /** Apply a mute change from the HUD toggle. */
-  setMuted(muted: boolean): void {
+  /**
+   * Push the current audio settings into the sound bank. Called on every store
+   * notification, so it must stay idempotent and cheap — assigning a gain that
+   * has not changed is free, and the 10 Hz HUD publishes go through here too.
+   */
+  private applyAudioSettings(): void {
+    const { muted, sfxVolume } = appStore.getState().settings;
+    this.sfx?.setVolume(sfxVolume / 100);
     this.sfx?.setMuted(muted);
     if (!muted) this.sfx?.resume();
   }
@@ -769,8 +774,11 @@ export class ArenaScene extends Phaser.Scene {
     const py = this.world.players.posY[this.localPlayer] ?? 0;
     const dist = Math.hypot(px - x, py - y);
     const strength = Math.max(0, 1 - dist / (radius * 3));
+    // Accessibility: damp rather than disable, so an explosion still registers
+    // as an impact for players who cannot tolerate the full shake.
+    const scale = appStore.getState().settings.reducedShake ? 0.25 : 1;
     if (strength > 0.05) {
-      this.cameras.main.shake(140, 0.004 * strength);
+      this.cameras.main.shake(140, 0.004 * strength * scale);
     }
   }
 }

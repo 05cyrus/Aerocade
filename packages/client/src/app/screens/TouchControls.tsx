@@ -15,6 +15,7 @@ import {
   JET_THRESHOLD,
 } from '../../game/input/stick.js';
 import { touchInput } from '../../game/input/TouchInput.js';
+import { useAppState } from '../store.js';
 
 /**
  * Mobile twin-stick control layer (docs/ui.md §5).
@@ -50,6 +51,12 @@ interface Visual {
 }
 
 export function TouchControls(): ReactElement {
+  // Layout settings, read as state so a change on the settings screen applies
+  // live. The stick RADIUS scales too, not just the visuals: scaling only the
+  // rings would leave a big stick that still reaches full deflection early.
+  const controlScale = useAppState((st) => st.settings.controlScale);
+  const leftHanded = useAppState((st) => st.settings.leftHanded);
+  const radius = STICK_RADIUS_PX * controlScale;
   const move = useRef<StickState | null>(null);
   const aim = useRef<StickState | null>(null);
   const firing = useRef(false);
@@ -130,7 +137,7 @@ export function TouchControls(): ReactElement {
     // Route strictly by pointer id: with two thumbs down, the other stick's
     // moves also arrive here, and honouring them would cross-wire the sticks.
     if (stick.pointerId !== e.pointerId) return;
-    const s = resolveStick(stick.originX, stick.originY, e.clientX, e.clientY);
+    const s = resolveStick(stick.originX, stick.originY, e.clientX, e.clientY, radius);
     stick.originX = s.originX;
     stick.originY = s.originY;
     stick.x = s.x;
@@ -138,8 +145,8 @@ export function TouchControls(): ReactElement {
     const visual: Visual = {
       originX: s.originX,
       originY: s.originY,
-      knobX: s.originX + s.x * STICK_RADIUS_PX,
-      knobY: s.originY + s.y * STICK_RADIUS_PX,
+      knobX: s.originX + s.x * radius,
+      knobY: s.originY + s.y * radius,
     };
     if (slot === 'move') {
       setMoveVisual(visual);
@@ -219,8 +226,14 @@ export function TouchControls(): ReactElement {
         <div>Aerocade plays in landscape</div>
       </div>
       <div className="touch-layer">
-        <div className="touch-zone touch-zone-move" {...zone('move')} />
-        <div className="touch-zone touch-zone-aim" {...zone('aim')} />
+        <div
+          className={`touch-zone ${leftHanded ? 'touch-zone-right' : 'touch-zone-left'}`}
+          {...zone('move')}
+        />
+        <div
+          className={`touch-zone ${leftHanded ? 'touch-zone-left' : 'touch-zone-right'}`}
+          {...zone('aim')}
+        />
 
         {[
           { visual: moveVisual, key: 'm' },
@@ -251,7 +264,10 @@ export function TouchControls(): ReactElement {
           ),
         )}
 
-        <div className="touch-cluster">
+        <div
+          className={`touch-cluster${leftHanded ? ' mirrored' : ''}`}
+          style={{ ['--touch-scale' as string]: String(controlScale) }}
+        >
           {button('Jetpack', '▲', Buttons.Jump | Buttons.Thrust)}
           {button('Grenade', '✸', Buttons.Grenade)}
           {button('Reload', '⟳', Buttons.Reload)}

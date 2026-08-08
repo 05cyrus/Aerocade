@@ -32,7 +32,8 @@ Honest status per milestone (full plan in [docs/roadmap.md](docs/roadmap.md)):
 | Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen    | M4        | Planned                                                                                                  |
 | Procedurally generated sound: weapons, explosions, jetpack loop, mute     | M5        | Done                                                                                                     |
 | Mobile twin-stick touch controls (dynamic sticks, button cluster)         | M5        | Done                                                                                                     |
-| Gamepad API, settings screen (volume, keybinds, layout scale)             | M5        | Planned                                                                                                  |
+| Settings: name, SFX volume, control scale, left-handed, reduced shake     | M5        | Partial — persisted to IndexedDB; keybind remapping remains                                              |
+| Gamepad support (standard mapping: sticks, triggers, D-pad, face buttons) | M5        | Done                                                                                                     |
 | PWA polish, more maps, moving platforms/jump pads, perf hardening         | M6        | Planned                                                                                                  |
 | AI opponents, Survival waves, Training mode                               | M7        | Planned                                                                                                  |
 | Release hardening: soak tests, docs completion, packaging                 | M8        | Planned                                                                                                  |

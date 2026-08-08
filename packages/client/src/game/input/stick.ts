@@ -23,6 +23,34 @@ export const JET_THRESHOLD = 0.6;
 export const FIRE_ON = 0.75;
 export const FIRE_OFF = 0.65;
 
+/** A resolved two-axis input: direction, deflection, and screen-space angle. */
+export interface StickAxis {
+  x: number;
+  y: number;
+  magnitude: number;
+  angle: number;
+}
+
+/**
+ * Apply a radial deadzone to a raw -1…1 pair and re-normalise what is left.
+ *
+ * Shared by the touch sticks and the gamepad rather than implemented twice:
+ * both need the same "dead below the threshold, and no jump when crossing it"
+ * behaviour, and physical gamepad sticks need it even more than thumbs do
+ * because they rest off-centre as they wear.
+ */
+export function applyDeadzone(x: number, y: number, deadzone: number = STICK_DEADZONE): StickAxis {
+  const length = Math.hypot(x, y);
+  if (length === 0) return { x: 0, y: 0, magnitude: 0, angle: 0 };
+  // Normalise by the true length, not the clamped one, or an over-unity input
+  // (diagonal sticks report up to √2) would have its direction skewed.
+  const nx = x / length;
+  const ny = y / length;
+  const raw = Math.min(1, length);
+  const magnitude = raw <= deadzone ? 0 : (raw - deadzone) / (1 - deadzone);
+  return { x: nx * magnitude, y: ny * magnitude, magnitude, angle: Math.atan2(y, x) };
+}
+
 export interface StickSample {
   /** Direction scaled by deflection; each component in [-1, 1]. */
   x: number;
@@ -78,18 +106,9 @@ export function resolveStick(
     return { x: 0, y: 0, magnitude: 0, angle: ZERO_ANGLE, originX: ox, originY: oy };
   }
 
-  const raw = Math.min(distance, radius) / radius;
-  const magnitude = raw <= STICK_DEADZONE ? 0 : (raw - STICK_DEADZONE) / (1 - STICK_DEADZONE);
-  const nx = dx / distance;
-  const ny = dy / distance;
-  return {
-    x: nx * magnitude,
-    y: ny * magnitude,
-    magnitude,
-    angle: Math.atan2(dy, dx),
-    originX: ox,
-    originY: oy,
-  };
+  // Express the offset in radius units, then reuse the shared deadzone curve.
+  const axis = applyDeadzone(dx / radius, dy / radius);
+  return { ...axis, originX: ox, originY: oy };
 }
 
 /**

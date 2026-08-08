@@ -19,7 +19,7 @@ export function Hud(): ReactElement {
   const scoped = useAppState((s) => s.scoped);
   const scopeZoom = useAppState((s) => s.scopeZoom);
   const weaponIcons = useAppState((s) => s.weaponIcons);
-  const muted = useAppState((s) => s.muted);
+  const muted = useAppState((s) => s.settings.muted);
   const icon = weaponIcons[hud.weaponId];
   const otherIcon = weaponIcons[hud.otherWeaponId];
 

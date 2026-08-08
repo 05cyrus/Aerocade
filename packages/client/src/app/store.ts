@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { DEFAULT_MAP_ID, type MapId } from '@aerocade/shared';
+import { DEFAULT_SETTINGS, saveSettings, type Settings } from './settings.js';
 
 /**
  * Minimal external store bridging the game session to React (no state
@@ -7,7 +8,7 @@ import { DEFAULT_MAP_ID, type MapId } from '@aerocade/shared';
  * `setState` on events / a 10 Hz timer; React subscribes per selector.
  */
 
-export type Screen = 'menu' | 'sandbox';
+export type Screen = 'menu' | 'settings' | 'sandbox';
 
 /**
  * Map the next sandbox session will load. Aliased to the shared `MapId` rather
@@ -71,8 +72,8 @@ export interface AppState {
   scopeZoom: number;
   /** Data-URL icon per WeaponId, cropped from the render atlas at boot. */
   weaponIcons: readonly string[];
-  /** Sound off. Not persisted yet — settings storage is a later milestone. */
-  muted: boolean;
+  /** Persisted player preferences (docs/ui.md §6). */
+  settings: Settings;
 }
 
 const initialHud: HudState = {
@@ -105,7 +106,7 @@ let state: AppState = {
   scoped: false,
   scopeZoom: 1,
   weaponIcons: [],
-  muted: false,
+  settings: { ...DEFAULT_SETTINGS },
 };
 
 const listeners = new Set<() => void>();
@@ -230,7 +231,22 @@ export const appStore = {
   },
   /** Flip the sound on/off. The scene watches this and moves its master gain. */
   toggleMute(): void {
-    state = { ...state, muted: !state.muted };
+    appStore.patchSettings({ muted: !state.settings.muted });
+  },
+  /**
+   * Apply a settings change live and persist it. Writing on every change is
+   * fine here — these are user-driven and rare, unlike anything on the game
+   * loop — and it means a crash never loses a preference the player just set.
+   */
+  patchSettings(patch: Partial<Settings>): void {
+    const settings = { ...state.settings, ...patch };
+    state = { ...state, settings };
+    notify();
+    void saveSettings(settings);
+  },
+  /** Replace wholesale, without a write — used when loading from storage. */
+  hydrateSettings(settings: Settings): void {
+    state = { ...state, settings };
     notify();
   },
   setMap(mapId: SelectedMap): void {

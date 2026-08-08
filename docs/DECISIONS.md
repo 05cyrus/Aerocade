@@ -498,6 +498,86 @@ full deflection — the cross-wiring case that pointer-id routing exists to prev
 Not done: no grenade hold-power arc, no left-handed mirror, no layout-scale or sensitivity setting
 (all wait on the settings screen), and Gamepad API support is still open.
 
+## ADR-023: Settings persist to IndexedDB, and only settings with a consumer ship
+
+The settings screen from `docs/ui.md` §6 is built: one scrollable grouped list, every change applied
+live and written immediately. There is no Save button — a change that can be lost by backing out is
+a change the player will lose.
+
+**Validation is the whole risk, so it is pure and heavily tested.** A settings record is the only
+state that enters the program from _outside_ it — written by an older build, hand-edited in
+devtools, or truncated by a crash. `normalizeSettings` coerces and clamps every field and doubles
+as the migration path: a partial or older record keeps whatever still validates and takes defaults
+for the rest, so adding a setting never invalidates saved preferences and removing one never leaves
+a stale value behind. 24 tests cover the shapes that actually turn up, including the two that
+survive naive clamping — `Infinity` (a min/max would silently accept it as the limit) and `NaN`
+(poisons every later comparison).
+
+**Failing to read a preference is not a reason to refuse to start.** `loadSettings` never rejects:
+private-browsing modes, disabled storage and corrupt records all resolve to defaults, and loading
+happens after first paint so defaults render immediately.
+
+**Two settings from the spec are deliberately absent rather than stubbed.**
+
+- **Aim sensitivity has nothing to scale.** Aerocade aims _absolutely_ — the mouse aims at a world
+  point, the aim stick reports a direction — so there is no relative delta for a multiplier to act
+  on. Shipping the slider would have been a control that silently does nothing.
+- **Keybind remapping needs the keyboard sampler to become data-driven first.** `KeyboardMouseInput`
+  hard-codes its `KeyA`/`KeyD` checks; a table that cannot actually rebind is worse than no table.
+
+**`muted` moved out of the store and into settings**, so there is one source of truth and the HUD
+toggle persists for free. Mute still wins over volume at the master gain rather than being folded
+into it, so unmuting restores the level the player chose.
+
+Verified end to end in a browser: changes apply live, survive a full page reload via IndexedDB
+(name, volume, scale, left-handed and reduced-shake all restored), reset returns defaults, and the
+configured name reaches the kill feed — `Vega ⚡ Bolt Dummy`, where it previously read `You`.
+
+Not done: no keybind table, no gamepad bindings, no music volume (no music), no colourblind palette.
+
+## ADR-024: Gamepad is a third input channel, polled, sharing the touch layer's maths
+
+Gamepad support completes the input story: keyboard/mouse, touch and now a controller all write the
+same `InputCommand`, and the simulation cannot tell them apart.
+
+**Polled, not evented.** The Gamepad API has no button events, and a `Gamepad` object is a snapshot
+that never updates — so `navigator.getGamepads()` is re-read inside `sample()`, once per simulation
+tick, alongside the other samplers. Holding a `Gamepad` reference and reading it later returns stale
+values, which is the classic bug here.
+
+**Mapping is pure, so it is testable without hardware.** `mapGamepad(pad, walkSpeed, runSpeed)` takes
+a `GamepadLike` — just `axes` and `buttons` — so 21 tests drive synthetic pads through every binding,
+the deadzone, D-pad precedence and a half-pulled analog trigger. CI needs no controller.
+
+**The deadzone curve is now shared with the touch sticks.** `applyDeadzone` was extracted from
+`resolveStick` rather than reimplemented: both need "dead below the threshold, and no jump when
+crossing it", and a physical stick needs it more than a thumb does because it rests off-centre as it
+wears. The extraction is behaviour-preserving — all 21 existing stick tests stayed green.
+
+Three details worth recording:
+
+- **An idle right stick must report `null`, not an angle of 0.** Aim is absolute, so returning 0
+  would snap the soldier to face right the instant a controller is connected, silently stealing
+  mouse aim. Unplugging hands aiming straight back to the mouse.
+- **Aiming and firing are separate on a pad.** The touch layer fires from aim-stick deflection
+  because it has no trigger; a controller has one, so the right stick aims and the right trigger
+  fires. You can track a target without shooting.
+- **The D-pad wins over the left stick** when both are deflected, so a thumb resting on a worn,
+  drifting stick cannot fight a deliberate D-pad press.
+
+Verified in a browser against a synthetic pad injected over `navigator.getGamepads`: walk/run tiers,
+aim exactly −π/2 from the right stick with fire disengaged, trigger firing, jetpack climbing, and
+mouse aim returning on disconnect.
+
+**A note on the harness, not the feature.** The first run of that scenario appeared to show the right
+stick and trigger being ignored. They were not — the headless run manages ~36 fps, the accumulator
+drops backlog, and fixed `waitForTimeout` sleeps were reading state before any tick had consumed the
+new pad values. The scenario now waits on `world.tick` advancing. Worth remembering: any in-game
+assertion in this project must wait on sim ticks, never wall clock.
+
+Not done: no rebinding (the same blocker as the keyboard — `KeyboardMouseInput` is not yet
+data-driven), no rumble, no per-pad profiles, and no on-screen indication that a pad is connected.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

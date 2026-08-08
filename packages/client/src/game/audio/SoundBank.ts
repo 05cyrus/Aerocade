@@ -23,7 +23,10 @@ const FALLOFF_FAR_M = 42;
 /** Metres of separation that map to a fully hard-panned sound. */
 const PAN_WIDTH_M = 22;
 
-/** Global headroom. Several guns firing at once must not clip the master. */
+/**
+ * Global headroom at 100% volume. Several guns firing at once must not clip the
+ * master, so the ceiling stays well under 1 even at full setting.
+ */
 const MASTER_GAIN = 0.55;
 
 /** Jetpack gain ramp, seconds — short enough to feel keyed to the thruster. */
@@ -50,6 +53,8 @@ export class SoundBank {
   private jetSource: AudioBufferSourceNode | null = null;
   private jetGain: GainNode | null = null;
   private muted = false;
+  /** 0–1 from the settings screen; multiplies the headroom ceiling. */
+  private volume = 1;
 
   constructor(context: AudioContextLike) {
     this.context = context;
@@ -92,7 +97,17 @@ export class SoundBank {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
-    this.master.gain.value = muted ? 0 : MASTER_GAIN;
+    this.applyMasterGain();
+  }
+
+  /** Set output level, 0–1. Muting still wins regardless of volume. */
+  setVolume(volume: number): void {
+    this.volume = Math.max(0, Math.min(1, volume));
+    this.applyMasterGain();
+  }
+
+  private applyMasterGain(): void {
+    this.master.gain.value = this.muted ? 0 : MASTER_GAIN * this.volume;
   }
 
   isMuted(): boolean {

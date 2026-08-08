@@ -20,6 +20,7 @@ import {
 import { appStore, type HudState } from '../app/store.js';
 import { KeyboardMouseInput } from './input/KeyboardMouseInput.js';
 import { touchInput } from './input/TouchInput.js';
+import { GamepadInput } from './input/GamepadInput.js';
 import { ArenaScene, type SceneDriver } from './render/ArenaScene.js';
 import { RenderInterpolator } from './render/RenderInterpolator.js';
 
@@ -56,6 +57,7 @@ export class GameSession implements SceneDriver {
   private readonly localPlayer: number;
   private readonly dummies: number[] = [];
   private readonly input = new KeyboardMouseInput();
+  private readonly pad = new GamepadInput(TUNING.player.walkSpeed, TUNING.player.runSpeed);
   private readonly interp = new RenderInterpolator();
   private game: Phaser.Game | null = null;
   private scene: ArenaScene | null = null;
@@ -139,8 +141,14 @@ export class GameSession implements SceneDriver {
     // phone user tapping a HUD button mid-run, must not have one source cancel
     // the other. Axes take whichever source is actually deflected.
     const touch = touchInput.sample();
-    const moveX = touch.moveX !== 0 ? touch.moveX : sampled.moveX;
-    const moveY = touch.moveY !== 0 ? touch.moveY : sampled.moveY;
+    // The Gamepad API has no events, so it must be polled here rather than
+    // accumulated between ticks like the keyboard.
+    const pad = this.pad.sample();
+    // Axes take whichever source is actually deflected, in order of directness:
+    // a thumb on screen, then a stick, then keys. Buttons are OR'd, so a pad
+    // face button and a keypress both work in the same match.
+    const moveX = touch.moveX !== 0 ? touch.moveX : pad.moveX !== 0 ? pad.moveX : sampled.moveX;
+    const moveY = touch.moveY !== 0 ? touch.moveY : pad.moveY !== 0 ? pad.moveY : sampled.moveY;
     // The on-screen pickup button feeds the same input path as the E key, so
     // the simulation cannot tell tap from keypress.
     // Both on-screen buttons feed the normal input path, so the simulation
@@ -148,6 +156,7 @@ export class GameSession implements SceneDriver {
     const buttons =
       sampled.buttons |
       touch.buttons |
+      pad.buttons |
       (appStore.consumeInteract() ? Buttons.Interact : 0) |
       (appStore.consumeWeaponSwitch() ? Buttons.SwitchWeapon : 0);
     // Scope is presentation: the Z key and the on-screen button both flip a
@@ -161,7 +170,7 @@ export class GameSession implements SceneDriver {
     // The aim stick overrides pointer aim while it is engaged. Without this the
     // scene would aim at `activePointer`, which on a touchscreen is whichever
     // finger moved last — so driving the MOVE stick would swing your aim.
-    this.lastAim = touch.aim ?? scene.computeAimFor(this.localPlayer, this.interp);
+    this.lastAim = touch.aim ?? pad.aim ?? scene.computeAimFor(this.localPlayer, this.interp);
     setInput(this.world, this.localPlayer, {
       seq: this.world.tick,
       moveX,
@@ -266,7 +275,7 @@ export class GameSession implements SceneDriver {
   }
 
   private nameOf(slot: number): string {
-    if (slot === this.localPlayer) return 'You';
+    if (slot === this.localPlayer) return appStore.getState().settings.playerName;
     const dummyIndex = this.dummies.indexOf(slot);
     if (dummyIndex >= 0) return DUMMY_NAMES[dummyIndex] ?? 'Dummy';
     return slot < 0 ? 'The Arena' : `Player ${String(slot + 1)}`;

@@ -1,9 +1,42 @@
 import type { ReactElement } from 'react';
 import { MAP_IDS, MAP_SUMMARIES } from '@aerocade/shared';
 import { appStore, useAppState } from '../store.js';
+import {
+  ACTION_LABELS,
+  describeCode,
+  InputAction,
+  type Bindings,
+} from '../../game/input/bindings.js';
+
+/** Actions worth advertising on the menu, in the order they matter. */
+const HINT_ACTIONS: readonly InputAction[] = [
+  InputAction.MoveLeft,
+  InputAction.MoveRight,
+  InputAction.Jump,
+  InputAction.Fire,
+  InputAction.Melee,
+  InputAction.Grenade,
+  InputAction.Reload,
+  InputAction.SwitchWeapon,
+  InputAction.Interact,
+  InputAction.Scope,
+  InputAction.Walk,
+];
+
+/**
+ * Render the hint from the live bindings. It used to be hard-coded, which meant
+ * the menu confidently advertised A/D after the player had rebound them.
+ */
+function hintFor(bindings: Bindings): { action: InputAction; keys: string }[] {
+  return HINT_ACTIONS.map((action) => ({
+    action,
+    keys: bindings[action].map(describeCode).join(' / ') || 'unbound',
+  }));
+}
 
 export function MainMenu(): ReactElement {
   const mapId = useAppState((s) => s.mapId);
+  const bindings = useAppState((s) => s.settings.bindings);
   return (
     <div className="menu">
       <h1>AEROCADE</h1>
@@ -47,10 +80,13 @@ export function MainMenu(): ReactElement {
         Settings
       </button>
       <div className="hint">
-        <kbd>A</kbd>/<kbd>D</kbd> move · <kbd>Space</kbd> jump &amp; jetpack · <kbd>S</kbd> +{' '}
-        <kbd>Space</kbd> hover · mouse aim · <kbd>LMB</kbd> fire · <kbd>RMB</kbd> melee ·{' '}
-        <kbd>G</kbd> grenade · <kbd>R</kbd> reload · <kbd>Q</kbd> swap weapon · <kbd>E</kbd> take
-        weapon from pad · <kbd>Z</kbd> scope · <kbd>Shift</kbd> walk
+        {hintFor(bindings).map(({ action, keys }, i) => (
+          <span key={action}>
+            {i > 0 && ' · '}
+            <kbd>{keys}</kbd> {ACTION_LABELS[action].toLowerCase()}
+          </span>
+        ))}
+        {' · '}mouse or right stick aims
       </div>
     </div>
   );

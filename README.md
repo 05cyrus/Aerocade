@@ -16,27 +16,28 @@ networking, and an installable PWA shell.
 
 Honest status per milestone (full plan in [docs/roadmap.md](docs/roadmap.md)):
 
-| Feature                                                                   | Milestone | Status                                                                                                   |
-| ------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------- |
-| Deterministic 60 Hz sim core, ECS-lite pools, seeded RNG                  | M1        | Done                                                                                                     |
-| Local sandbox: run/jump/jetpack (with hover), aim, shoot, damage, respawn | M1        | Done                                                                                                     |
-| Articulated soldier rig with run cycle and per-weapon held guns           | M1        | Done                                                                                                     |
-| First map: **Foundry** (48×27 tile arena) + HUD                           | M1        | Done                                                                                                     |
-| **Outpost Delta** (175×98 arena: bunker, mountains, tunnels, 6 spawns)    | M6        | Done                                                                                                     |
-| **Hollow Works** (180×92, five carved layers, 8 spawns) — the default map | M6        | Done                                                                                                     |
-| Ladders, one-way platforms, health/ammo/grenade pickups                   | M3        | Done                                                                                                     |
-| LAN bridge: static hosting, rooms, WebRTC signaling, WS relay fallback    | M2        | Partial — bridge done; browser transport next                                                            |
-| Client prediction, reconciliation, snapshot interpolation, Playwright e2e | M2        | Planned                                                                                                  |
-| Weapon pads: fixed spots, random guns, timed respawn                      | M3        | Done                                                                                                     |
-| Full roster + lag compensation                                            | M3        | Partial — 7 weapons, grenades, melee, health/ammo pads done; Arclight Beam, Emberjet and lag comp remain |
-| Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen    | M4        | Planned                                                                                                  |
-| Procedurally generated sound: weapons, explosions, jetpack loop, mute     | M5        | Done                                                                                                     |
-| Mobile twin-stick touch controls (dynamic sticks, button cluster)         | M5        | Done                                                                                                     |
-| Settings: name, SFX volume, control scale, left-handed, reduced shake     | M5        | Partial — persisted to IndexedDB; keybind remapping remains                                              |
-| Gamepad support (standard mapping: sticks, triggers, D-pad, face buttons) | M5        | Done                                                                                                     |
-| PWA polish, more maps, moving platforms/jump pads, perf hardening         | M6        | Planned                                                                                                  |
-| AI opponents, Survival waves, Training mode                               | M7        | Planned                                                                                                  |
-| Release hardening: soak tests, docs completion, packaging                 | M8        | Planned                                                                                                  |
+| Feature                                                                     | Milestone | Status                                                                                                   |
+| --------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------- |
+| Deterministic 60 Hz sim core, ECS-lite pools, seeded RNG                    | M1        | Done                                                                                                     |
+| Local sandbox: run/jump/jetpack (with hover), aim, shoot, damage, respawn   | M1        | Done                                                                                                     |
+| Articulated soldier rig with run cycle and per-weapon held guns             | M1        | Done                                                                                                     |
+| First map: **Foundry** (48×27 tile arena) + HUD                             | M1        | Done                                                                                                     |
+| **Outpost Delta** (175×98 arena: bunker, mountains, tunnels, 6 spawns)      | M6        | Done                                                                                                     |
+| **Hollow Works** (180×92, five carved layers, 8 spawns) — the default map   | M6        | Done                                                                                                     |
+| Ladders, one-way platforms, health/ammo/grenade pickups                     | M3        | Done                                                                                                     |
+| LAN bridge: static hosting, rooms, WebRTC signaling, WS relay fallback      | M2        | Done                                                                                                     |
+| Wire codec + `Transport` seam + WS-relay transport (tested vs. real bridge) | M2        | Done                                                                                                     |
+| Host/client session, WebRTC path, prediction, reconciliation, interpolation | M2        | Planned — codec and relay transport are in place                                                         |
+| Weapon pads: fixed spots, random guns, timed respawn                        | M3        | Done                                                                                                     |
+| Full roster + lag compensation                                              | M3        | Partial — 7 weapons, grenades, melee, health/ammo pads done; Arclight Beam, Emberjet and lag comp remain |
+| Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen      | M4        | Planned                                                                                                  |
+| Procedurally generated sound: weapons, explosions, jetpack loop, mute       | M5        | Done                                                                                                     |
+| Mobile twin-stick touch controls (dynamic sticks, button cluster)           | M5        | Done                                                                                                     |
+| Settings + full keybind remapping, persisted to IndexedDB                   | M5        | Done                                                                                                     |
+| Gamepad support (standard mapping: sticks, triggers, D-pad, face buttons)   | M5        | Done                                                                                                     |
+| PWA polish, more maps, moving platforms/jump pads, perf hardening           | M6        | Planned                                                                                                  |
+| AI opponents, Survival waves, Training mode                                 | M7        | Planned                                                                                                  |
+| Release hardening: soak tests, docs completion, packaging                   | M8        | Planned                                                                                                  |
 
 ## Tech stack
 

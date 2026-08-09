@@ -605,6 +605,136 @@ Writing that test also surfaced a second, quieter problem: `.rotate-prompt` decl
 only _inside_ its portrait media query, so the base rule had no z-index at all. Layout now lives in
 the base rule and the query flips visibility only.
 
+## ADR-025: Bindings are data, and a rebind warns instead of stealing
+
+Keybind remapping was the last M5 item, and it was blocked on its own
+prerequisite: `KeyboardMouseInput` hard-coded `KeyA`, `Space`, mouse button 0 and the rest, so a
+settings table could display bindings but never change them. Bindings now live in
+`game/input/bindings.ts` as data, the sampler resolves actions through them, and the UI edits them.
+
+**`KeyboardEvent.code`, not `key`.** Codes are layout-independent — `KeyA` is the same physical key
+on QWERTY and AZERTY. Binding `event.key` would silently rebind itself when the OS layout changed.
+
+**Keyboard and mouse share one string space** (`KeyA`, `Mouse0`). One namespace makes conflict
+detection a plain string comparison instead of two parallel code paths, and it lets a player put
+Fire on a key or Melee on a mouse button without the model caring.
+
+**Two slots per action**, because the arrow-key alternates have always worked and dropping to one
+binding would have been a silent regression dressed up as a feature.
+
+**A rebind warns; it does not steal.** The first implementation cleared the code from whatever else
+held it, which guarantees no duplicates — and the in-browser check showed why that is wrong:
+binding Grenade to `R` left **Reload with nothing bound at all**, visible only as a dash in a table.
+Losing a control silently is worse than a visible clash, and `docs/ui.md` §6 asks for a warning
+rather than a rejection. Duplicates are now allowed, flagged inline and on both cells, and nothing
+is lost without the player choosing it. A test asserts that binding every action to one shared key
+still leaves every action bound.
+
+**Validation matches the rest of the settings record.** `normalizeBindings` never throws; an action
+whose stored codes are all junk falls back to its defaults rather than becoming permanently
+**unbindable**, which is the one corruption that would need clearing site storage to escape. The
+settings record went to v2; a v1 record simply picks up default bindings.
+
+**Rebinding a held key clears held state.** Otherwise a key held while its action is remapped stays
+stuck down for an action it no longer feeds.
+
+**The menu hint is generated from live bindings.** It used to be hard-coded, so it would have
+confidently advertised A/D to a player who had rebound them — a doc bug that only appears once
+rebinding exists.
+
+Verified in a browser: after remapping Move right to `L`, holding `D` moves **0 m** and holding `L`
+moves **5.61 m**; Escape cancels a capture instead of binding itself; per-table reset restores
+defaults; a binding survives a page reload; and the menu hint updates from `D` to `L`.
+
+Not done: no gamepad rebinding (the pad mapping is still fixed), no per-profile bindings, and no
+conflict resolution beyond the warning.
+
+## ADR-026: The wire codec is built and tested before any transport
+
+M2 starts with the binary codec from `docs/networking.md` §5, not with sockets. Prediction,
+reconciliation and interpolation are all meaningless if a snapshot does not survive a round trip, and
+a quantization bug at this layer surfaces as lag or suspected cheating rather than as a bug. ADR-010
+has listed "snapshot round-trips" as a test target since M0; those tests now exist (32 of them).
+
+**The spec's quantization note was stale, and it mattered.** It says positions fit `u16` at 1/256 m
+because "the map is 48×27 m". Hollow Works is 180×92 m. It still fits — the real ceiling is
+**255.996 m** — but the headroom is a third of what that note implies, and a map past 256 m would
+**wrap silently**, teleporting players with no error anywhere. `assertEncodable` now fails loudly, and
+a test walks every registered map through it. Velocity headroom was checked the same way: ±127.99 m/s
+against a `hardSpeedCap` of 45.
+
+**Aim resolution was chosen against the longest shot, not by feel.** A `u16` over a full turn is
+~0.0055°; at the Longbolt's 70 m range that is under 7 mm of drift, well inside a player's 0.85 m
+width. The test asserts that product rather than the raw angle, so it stays meaningful if either
+number changes.
+
+**The pickup record is 6 bytes, not the spec's 2.** `index, state` cannot place an item. That is fine
+for pad guns, whose position comes from the map, but wrong for gear dropped on a swap or a death —
+that is thrown and falls under gravity (ADR-015), so a client given 2 bytes has nowhere to draw it.
+Position is carried rather than inferred. Deltas also explicitly report a pickup that _vanished_;
+omitting it means "unchanged", so without that the client would keep drawing a looted gun forever.
+
+**`tuningHash` exists because desync is invisible.** Two peers on different tuning values produce
+different positions from identical inputs, which reads as lag or cheating. Hashing protocol version
+plus tuning plus weapon defs into `WELCOME` turns that into an immediate, legible rejection. FNV-1a
+is used because it is dependency-free and stable across engines — a hash that differed per browser
+would reject every join.
+
+**Naming:** the wire type is `WireSnapshot`, because `sim/world.ts` already exports `Snapshot` for the
+rollback copy of the whole pool set. Conflating the quantized network subset with the rollback state
+would be a genuinely confusing bug.
+
+Two of the first test failures were the tests' fault, worth recording because both are easy to
+repeat: `createMatch` builds an _empty_ match, so a capture found no players until the test called
+`addPlayer`; and aim error must be measured as a **shortest arc**, since −π and +π are the same
+heading yet differ by 2π as plain numbers, which reported a full turn of error for a perfect round
+trip.
+
+Still to come in M2: the `Transport` interface with a WebSocket-relay implementation, then WebRTC
+behind the same interface, then the host/client session, then prediction and reconciliation, then
+interpolation. `H2C_EVENT` is specified but not yet encoded — it lands with the session that needs it.
+
+## ADR-027: The transport seam, and why its test uses the real bridge
+
+`Transport` (docs/networking.md §3) is the interface the game talks to; it never sees a socket. ADR-006
+requires the WebSocket-relay fallback to be invisible to the game, and the only way to keep that
+promise true is to give the game no way to tell the paths apart. `RelayTransport` is the first
+implementation; the WebRTC one lands behind the same interface.
+
+**The socket is injected, and that is a testing decision as much as a layering one.** `packages/shared`
+may not reference DOM or Node types (ADR-002), so `BridgeClient` takes a factory that adapts whatever
+WebSocket the environment has to plain callbacks. The payoff is that the code the browser runs is
+**exactly** the code the tests drive — from Node, against the real bridge, with no environment branch.
+A mocked transport would prove nothing here: every interesting failure in this layer is base64
+handling, the channel tag, room addressing or a payload cap, and a stub fakes all four happily. The
+12 new tests in `packages/server/test/relay.test.ts` run two real clients through the real bridge
+carrying real codec frames.
+
+**Base64 is hand-rolled** rather than `btoa`/`atob` (browser-only) or `Buffer` (Node-only), because
+this exact path runs in both and branching would mean the tested path is not the shipped path. It
+returns `null` on malformed input instead of throwing or emitting partial bytes — a truncated game
+frame is garbage, not a partial update (docs/security.md). Tested across every byte value and every
+length modulo 3, so the padding cases are actually exercised.
+
+**A 1-byte channel tag** carries the reliable/unreliable distinction over the single relay socket, and
+is what lets the relay honour "unreliable" at all: `Channel.Data` frames are dropped when the socket
+is backed up, because a queued 60 Hz input is already stale by the time it flushes and holding it
+only delays the next one. `send` returns false on a deliberate drop so callers can count them rather
+than assume delivery, and `broadcast` tags once and reuses the buffer — tagging per peer would copy
+it eight times per snapshot, which is exactly the per-frame allocation the budget forbids.
+
+**Oversized frames fail at the sender.** The bridge rejects a relay payload over 16 KiB; discovering
+that as a mysterious disconnect would be miserable to debug, so `sendRelay` refuses and reports
+`bad-message` locally. A test asserts the socket is still usable afterwards.
+
+**`error` is awaited alongside every happy-path reply.** The bridge answers a bad request with
+`error`, so a request that only listened for its success message would time out after 8 s and never
+say why — verified by asserting a join to a missing room rejects with `room-not-found`.
+
+Still to come in M2: the host/client session that drives this (host runs the authoritative sim and
+broadcasts snapshots, clients send inputs), the WebRTC transport, then prediction, reconciliation and
+the interpolation buffer. `H2C_EVENT` remains specified but unencoded until the session needs it.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

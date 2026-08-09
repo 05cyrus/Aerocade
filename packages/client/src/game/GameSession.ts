@@ -65,6 +65,8 @@ export class GameSession implements SceneDriver {
   private lastAim = 0;
   private lastFrameAt = 0;
   private lastLoadoutSignature = '';
+  private lastBindings = appStore.getState().settings.bindings;
+  private unsubscribeSettings: (() => void) | null = null;
   /** Scoped view. Client-only camera state — never reaches the sim (ADR-016). */
   private scoped = false;
   private destroyed = false;
@@ -78,6 +80,17 @@ export class GameSession implements SceneDriver {
     this.dummies.push(addPlayer(this.world), addPlayer(this.world));
 
     this.input.attach();
+    // Bindings are settings, so the sampler has to track them for the whole
+    // session — a rebind made on the settings screen must apply on return
+    // without restarting the match.
+    this.input.setBindings(appStore.getState().settings.bindings);
+    this.unsubscribeSettings = appStore.subscribe(() => {
+      const next = appStore.getState().settings.bindings;
+      if (next !== this.lastBindings) {
+        this.lastBindings = next;
+        this.input.setBindings(next);
+      }
+    });
     if (import.meta.env.DEV) {
       window.__aeroDebug = {
         world: this.world,
@@ -315,6 +328,8 @@ export class GameSession implements SceneDriver {
   destroy(): void {
     this.destroyed = true;
     if (window.__aeroDebug?.world === this.world) delete window.__aeroDebug;
+    this.unsubscribeSettings?.();
+    this.unsubscribeSettings = null;
     this.input.detach();
     this.game?.destroy(true);
     this.game = null;

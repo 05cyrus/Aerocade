@@ -1,20 +1,21 @@
 import type { ReactElement } from 'react';
 import { appStore, useAppState } from '../store.js';
 import { DEFAULT_SETTINGS, SETTINGS_LIMITS } from '../settings.js';
+import { Keybinds } from './Keybinds.js';
 
 /**
  * Settings screen (docs/ui.md §6): one scrollable grouped list where every
  * change applies **live** and is persisted immediately — there is no Save
  * button, so a change can never be silently lost by backing out.
  *
- * Only settings with a real consumer are shown. Two from the spec are absent on
- * purpose rather than stubbed:
+ * Only settings with a real consumer are shown. **Aim sensitivity** is absent on
+ * purpose rather than stubbed: Aerocade aims absolutely (the mouse aims at a
+ * world point, the stick reports a direction), so there is no relative delta a
+ * multiplier could act on.
  *
- * - **Aim sensitivity** has nothing to scale. Aerocade aims absolutely (the
- *   mouse aims at a world point, the stick reports a direction), so there is no
- *   relative delta a multiplier could act on.
- * - **Keybind remapping** needs the keyboard sampler to become data-driven
- *   first; a table that cannot actually rebind would be worse than none.
+ * Keybind remapping lives in `Keybinds.tsx`. It became possible once
+ * `KeyboardMouseInput` started resolving actions through a binding table instead
+ * of hard-coded key codes.
  */
 export function Settings(): ReactElement {
   const s = useAppState((st) => st.settings);
@@ -103,6 +104,8 @@ export function Settings(): ReactElement {
         </label>
         <p className="settings-note">Applies to the on-screen controls on touch devices.</p>
       </section>
+
+      <Keybinds />
 
       <section className="settings-group">
         <h2>Accessibility</h2>

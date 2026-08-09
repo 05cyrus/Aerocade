@@ -16,8 +16,13 @@
  * would have been a control that silently does nothing.
  */
 
-/** Bumped when the record's shape changes; older records migrate on load. */
-export const SETTINGS_VERSION = 1;
+import { DEFAULT_BINDINGS, normalizeBindings, type Bindings } from '../game/input/bindings.js';
+
+/**
+ * Bumped when the record's shape changes; older records migrate on load. v2
+ * added keybindings — a v1 record simply picks up the defaults for them.
+ */
+export const SETTINGS_VERSION = 2;
 
 export interface Settings {
   version: number;
@@ -32,6 +37,8 @@ export interface Settings {
   leftHanded: boolean;
   /** Damps camera shake for players who find it uncomfortable. */
   reducedShake: boolean;
+  /** Keyboard and mouse bindings, by action (see game/input/bindings.ts). */
+  bindings: Bindings;
 }
 
 export const SETTINGS_LIMITS = {
@@ -48,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
   controlScale: 1,
   leftHanded: false,
   reducedShake: false,
+  bindings: DEFAULT_BINDINGS,
 };
 
 function clamp(value: unknown, min: number, max: number, fallback: number): number {
@@ -92,6 +100,9 @@ export function normalizeSettings(raw: unknown): Settings {
     ),
     leftHanded: boolOr(r.leftHanded, DEFAULT_SETTINGS.leftHanded),
     reducedShake: boolOr(r.reducedShake, DEFAULT_SETTINGS.reducedShake),
+    // Delegated: an action left with nothing valid falls back to its defaults
+    // rather than becoming permanently unbindable.
+    bindings: normalizeBindings(r.bindings),
   };
 }
 

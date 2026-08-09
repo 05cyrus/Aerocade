@@ -39,3 +39,8 @@ export * from './sim/combat/weapon-defs.js';
 export { explode } from './sim/combat/explosions.js';
 
 export * from './protocol/messages.js';
+export * from './protocol/codec.js';
+export * from './net/base64.js';
+export * from './net/transport.js';
+export * from './net/bridge-client.js';
+export * from './net/relay-transport.js';

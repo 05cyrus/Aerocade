@@ -885,3 +885,55 @@ body,
   gap: 10px;
   margin-top: 10px;
 }
+
+/* ---------- keybinding table ---------- */
+
+.keybinds {
+  width: 100%;
+  border-collapse: collapse;
+}
+.keybinds th {
+  text-align: left;
+  font-weight: 400;
+  opacity: 0.8;
+  padding: 3px 0;
+}
+.keybinds td {
+  padding: 3px 0 3px 8px;
+  white-space: nowrap;
+}
+.keybind {
+  min-width: 92px;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.keybind.capturing {
+  outline: 2px solid #86974f;
+}
+/* A clash is warned about, never blocked — so it has to be visible. */
+.keybind.clash {
+  border-color: #ff8f5e;
+  color: #ff8f5e;
+}
+.keybind-clear {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 7px;
+  margin-left: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.settings-capture {
+  margin: 0 0 8px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: rgba(134, 151, 79, 0.18);
+  font-size: 13px;
+}
+.settings-warn {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #ff8f5e;
+}

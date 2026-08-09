@@ -1,31 +1,44 @@
-import { Buttons, type ButtonMask } from '@aerocade/shared';
+import { type ButtonMask } from '@aerocade/shared';
+import {
+  ACTION_BUTTON,
+  ALL_ACTIONS,
+  DEFAULT_BINDINGS,
+  InputAction,
+  mouseCode,
+  type Bindings,
+} from './bindings.js';
 
 /**
  * Desktop input sampler. Listens on the window, accumulates state, and is
- * drained once per simulation tick. Key taps shorter than one tick are
- * latched so no press is ever lost. Aim is composed by the scene (it needs
- * the camera transform); this class owns buttons and move axes only.
+ * drained once per simulation tick. Presses shorter than one tick are latched so
+ * no input is ever lost. Aim is composed by the scene (it needs the camera
+ * transform); this class owns buttons and move axes only.
  *
- * Bindings (docs/ui.md): A/D move, Space jump + jetpack, S hover,
- * Shift walk, LMB fire, RMB melee, G grenade, R reload, Q switch weapon,
- * E take the weapon on the pad you are standing on, Z toggle the scope.
+ * Bindings are **data**, not code (see `bindings.ts`): the sampler resolves
+ * actions through the current binding table, which is what makes the settings
+ * screen's rebinding table possible. Keyboard and mouse share one code space
+ * (`KeyA`, `Mouse0`), so an action can be bound to either without a special case
+ * here.
  *
- * Z is deliberately not a sim button: scoping only reframes the camera, so it
- * never reaches the simulation (ADR-016).
+ * Scope is deliberately not a simulation button: scoping only reframes the
+ * camera, so it never reaches the simulation (ADR-016).
  */
 export class KeyboardMouseInput {
   private readonly down = new Set<string>();
-  /** Keys pressed since the last sample (latch for sub-tick taps). */
+  /** Codes pressed since the last sample (latch for sub-tick taps). */
   private latched = new Set<string>();
-  private mouseDown = 0; // bitmask of pressed mouse buttons
-  private mouseLatched = 0;
+  private bindings: Bindings = DEFAULT_BINDINGS;
+
+  /** True once per Scope press; consumed by the caller. Client-side only. */
+  private scopeToggled = false;
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat) return;
     this.down.add(e.code);
     this.latched.add(e.code);
-    if (e.code === 'KeyZ') this.scopeToggled = true;
-    if (e.code === 'Space') e.preventDefault(); // page scroll
+    if (this.isBound(InputAction.Scope, e.code)) this.scopeToggled = true;
+    // Space scrolls the page; suppress it only when it is actually bound.
+    if (e.code === 'Space' && this.isAnyBinding(e.code)) e.preventDefault();
   };
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
@@ -33,21 +46,24 @@ export class KeyboardMouseInput {
   };
 
   private readonly onMouseDown = (e: MouseEvent): void => {
-    this.mouseDown |= 1 << e.button;
-    this.mouseLatched |= 1 << e.button;
+    const code = mouseCode(e.button);
+    this.down.add(code);
+    this.latched.add(code);
+    if (this.isBound(InputAction.Scope, code)) this.scopeToggled = true;
   };
 
   private readonly onMouseUp = (e: MouseEvent): void => {
-    this.mouseDown &= ~(1 << e.button);
+    this.down.delete(mouseCode(e.button));
   };
 
   private readonly onContextMenu = (e: Event): void => {
-    e.preventDefault(); // right click is melee
+    // Right click is bindable (melee by default), so the menu must never open.
+    e.preventDefault();
   };
 
   private readonly onBlur = (): void => {
+    // Losing focus mid-press would otherwise latch the player into running.
     this.down.clear();
-    this.mouseDown = 0;
   };
 
   attach(): void {
@@ -68,43 +84,51 @@ export class KeyboardMouseInput {
     window.removeEventListener('blur', this.onBlur);
   }
 
-  private active(code: string): boolean {
-    return this.down.has(code) || this.latched.has(code);
+  /**
+   * Swap the binding table. Held codes are cleared: a key held while its action
+   * is rebound would otherwise stay stuck down for an action it no longer feeds.
+   */
+  setBindings(bindings: Bindings): void {
+    this.bindings = bindings;
+    this.down.clear();
+    this.latched = new Set();
   }
 
-  private mouseActive(button: number): boolean {
-    const bit = 1 << button;
-    return (this.mouseDown & bit) !== 0 || (this.mouseLatched & bit) !== 0;
+  private isBound(action: InputAction, code: string): boolean {
+    return this.bindings[action].includes(code);
   }
 
-  /** True once per Z press; consumed by the caller. Client-side only. */
-  private scopeToggled = false;
+  private isAnyBinding(code: string): boolean {
+    return ALL_ACTIONS.some((action) => this.bindings[action].includes(code));
+  }
+
+  /** Is any code bound to this action currently active (held or latched)? */
+  private active(action: InputAction): boolean {
+    for (const code of this.bindings[action]) {
+      if (this.down.has(code) || this.latched.has(code)) return true;
+    }
+    return false;
+  }
 
   /** Drain accumulated state into (moveX, moveY, buttons) for one tick. */
   sample(): { moveX: number; moveY: number; buttons: ButtonMask; scopeToggled: boolean } {
     let moveX = 0;
-    if (this.active('KeyA') || this.active('ArrowLeft')) moveX -= 1;
-    if (this.active('KeyD') || this.active('ArrowRight')) moveX += 1;
+    if (this.active(InputAction.MoveLeft)) moveX -= 1;
+    if (this.active(InputAction.MoveRight)) moveX += 1;
 
     let moveY = 0;
-    if (this.active('KeyW') || this.active('ArrowUp')) moveY -= 1;
-    if (this.active('KeyS') || this.active('ArrowDown')) moveY += 1;
+    if (this.active(InputAction.Up)) moveY -= 1;
+    if (this.active(InputAction.Down)) moveY += 1;
 
-    let buttons = 0;
-    if (this.active('Space')) buttons |= Buttons.Jump | Buttons.Thrust;
-    if (this.active('ShiftLeft') || this.active('ShiftRight')) buttons |= Buttons.Walk;
-    if (this.active('KeyG')) buttons |= Buttons.Grenade;
-    if (this.active('KeyR')) buttons |= Buttons.Reload;
-    if (this.active('KeyQ')) buttons |= Buttons.SwitchWeapon;
-    if (this.active('KeyF')) buttons |= Buttons.Melee;
-    if (this.active('KeyE')) buttons |= Buttons.Interact;
-    if (this.mouseActive(0)) buttons |= Buttons.Fire;
-    if (this.mouseActive(2)) buttons |= Buttons.Melee;
+    let buttons: ButtonMask = 0;
+    for (const action of ALL_ACTIONS) {
+      const bit = ACTION_BUTTON[action];
+      if (bit !== null && this.active(action)) buttons |= bit;
+    }
 
     const scopeToggled = this.scopeToggled;
     this.scopeToggled = false;
     this.latched = new Set();
-    this.mouseLatched = 0;
     return { moveX, moveY, buttons, scopeToggled };
   }
 }

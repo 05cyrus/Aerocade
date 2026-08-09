@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_BINDINGS } from '../src/game/input/bindings.js';
 import {
   DEFAULT_SETTINGS,
   normalizeSettings,
@@ -118,6 +119,13 @@ describe('normalizeSettings: migration behaviour', () => {
     expect(normalizeSettings(withExtra)).toEqual(DEFAULT_SETTINGS);
   });
 
+  it('gives a v1 record (no bindings) the default bindings', () => {
+    // The migration that mattered in practice: v1 predates keybinding support.
+    const v1 = { version: 1, playerName: 'Old', sfxVolume: 30 };
+    expect(normalizeSettings(v1).bindings).toEqual(DEFAULT_BINDINGS);
+    expect(normalizeSettings(v1).playerName).toBe('Old');
+  });
+
   it('is idempotent — normalising twice changes nothing', () => {
     const once = normalizeSettings({ sfxVolume: 33.4, playerName: '  Pilot Two  ' });
     expect(normalizeSettings(once)).toEqual(once);
@@ -132,6 +140,7 @@ describe('normalizeSettings: migration behaviour', () => {
       controlScale: 1.2,
       leftHanded: true,
       reducedShake: true,
+      bindings: DEFAULT_BINDINGS,
     };
     expect(normalizeSettings(custom)).toEqual(custom);
   });

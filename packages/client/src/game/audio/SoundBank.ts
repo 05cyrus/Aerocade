@@ -1,4 +1,5 @@
 import { LOOPING, renderSfx, SfxId } from './sfx.js';
+import { loadSamples, type SampleDeps, type SampleLoadReport } from './samples.js';
 
 /**
  * Web Audio playback for the procedurally generated clips in `sfx.ts`.
@@ -44,6 +45,18 @@ export interface PlayOptions {
 
 /** The subset of AudioContext this class needs, so tests can supply a stub. */
 export type AudioContextLike = AudioContext;
+
+/**
+ * The app's base URL, so a PWA served from a subpath still finds its samples.
+ * Read through a guard because this module is unit tested outside a bundler.
+ */
+function baseUrl(): string {
+  try {
+    return import.meta.env.BASE_URL;
+  } catch {
+    return '/';
+  }
+}
 
 export class SoundBank {
   private readonly context: AudioContextLike;
@@ -145,6 +158,62 @@ export class SoundBank {
       source.disconnect();
       gain.disconnect();
     };
+  }
+
+  /**
+   * Replace synthesised buffers with the recorded samples, where they exist.
+   *
+   * Deliberately not on the caller's critical path: the synth is already loaded,
+   * so this upgrades a working game rather than gating it. Every id fails
+   * independently and keeps its synthesised clip, so the worst outcome of a
+   * missing or undecodable file is a game that sounds like it did before.
+   */
+  async loadSamples(deps?: Partial<SampleDeps>): Promise<SampleLoadReport> {
+    const resolved: SampleDeps = {
+      fetch: deps?.fetch ?? ((url) => fetch(url)),
+      // The promise overload, not the callback one: it is the form that reliably
+      // rejects on an undecodable codec instead of resolving with nothing.
+      decode: deps?.decode ?? ((bytes) => this.context.decodeAudioData(bytes)),
+      baseUrl: deps?.baseUrl ?? baseUrl(),
+    };
+    return loadSamples(resolved, (id, buffer) => {
+      this.buffers.set(id, SoundBank.toMono(buffer, this.context));
+      // The jet loop is the only buffer that can already be playing. Swapping the
+      // map alone would leave the synthesised loop running for the rest of the
+      // match, so its voice is rebuilt at the level it currently sits at.
+      if (id === SfxId.JetLoop && this.jetSource !== null) this.restartJet();
+    });
+  }
+
+  /**
+   * Collapse a decoded sample to one channel.
+   *
+   * Everything downstream assumes mono: `spatial()` derives pan from world
+   * geometry, so a stereo sample would fight the panner and put one shot in two
+   * places at once. The bake writes mono; this is the guard for when it does not.
+   */
+  private static toMono(buffer: AudioBuffer, context: AudioContextLike): AudioBuffer {
+    if (buffer.numberOfChannels === 1) return buffer;
+    const mono = context.createBuffer(1, buffer.length, buffer.sampleRate);
+    const out = mono.getChannelData(0);
+    for (let c = 0; c < buffer.numberOfChannels; c++) {
+      const channel = buffer.getChannelData(c);
+      for (let i = 0; i < channel.length; i++) out[i] = (out[i] ?? 0) + (channel[i] ?? 0);
+    }
+    const scale = 1 / buffer.numberOfChannels;
+    for (let i = 0; i < out.length; i++) out[i] = (out[i] ?? 0) * scale;
+    return mono;
+  }
+
+  /** Rebuild the jet voice on the current buffer, preserving its level. */
+  private restartJet(): void {
+    const level = this.jetGain?.gain.value ?? 0;
+    this.jetSource?.stop();
+    this.jetSource?.disconnect();
+    this.jetGain?.disconnect();
+    this.jetSource = null;
+    this.jetGain = null;
+    if (level > 0) this.setJet(level / JET_GAIN);
   }
 
   /**

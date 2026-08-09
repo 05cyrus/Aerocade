@@ -28,6 +28,7 @@ import { TerrainView } from './TerrainView.js';
 import { appStore } from '../../app/store.js';
 import { SoundBank } from '../audio/SoundBank.js';
 import { SfxId } from '../audio/sfx.js';
+import { shotSfx } from '../audio/weapon-sfx.js';
 import type { RenderInterpolator } from './RenderInterpolator.js';
 
 /** Target visible area in meters; zoom adapts the viewport to show this much. */
@@ -52,20 +53,6 @@ const HEALTH_BAR_WIDTH_PX = 64 * HEALTH_BAR_SCALE;
 const HEALTH_BAR_Y_OFFSET_PX = -34;
 /** Empty-portion color; must contrast with the arena, not blend into it. */
 const HEALTH_BAR_BACK_COLOR = 0x39456b;
-/**
- * Firing sound per weapon, indexed by `WeaponId`. Guns that share a class share
- * a clip — the roster should sound like one armoury, not seven unrelated noises.
- */
-const SHOT_SFX: readonly SfxId[] = [
-  SfxId.ShotLight, // Rivet Pistol
-  SfxId.ShotLight, // Vortex SMG
-  SfxId.ShotRifle, // Pulse Rifle
-  SfxId.ShotShotgun, // Scattergun
-  SfxId.ShotSniper, // Longbolt Rifle
-  SfxId.ShotLauncher, // Thumper
-  SfxId.ShotLauncher, // Lobber
-];
-
 /** Fill colors interpolated by remaining health: green → amber → red. */
 const HEALTH_COLOR_FULL = 0x55e08c;
 const HEALTH_COLOR_MID = 0xf5e663;
@@ -163,8 +150,10 @@ export class ArenaScene extends Phaser.Scene {
   // ---------- construction ----------
 
   /**
-   * Generate the sound bank. Clips are synthesised here for the same reason
-   * textures are (ADR-001): nothing is loaded, so there is no asset step.
+   * Build the sound bank. Every clip is synthesised up front, then the recorded
+   * samples are fetched over the top of them (ADR-030) — so the scene is fully
+   * audible from its first frame and a sample that never arrives costs fidelity
+   * rather than sound.
    *
    * A browser keeps an AudioContext suspended until a user gesture. Entering
    * the sandbox is a click, so this usually starts running immediately, but the
@@ -176,6 +165,15 @@ export class ArenaScene extends Phaser.Scene {
     if (this.sfx === null) return;
     this.applyAudioSettings();
     this.sfx.resume();
+    // Not awaited: the synthesised bank is already usable, so blocking scene
+    // creation on the network would delay the first frame to buy nothing. The
+    // report is only interesting in dev — in production a fallback is a quality
+    // difference nobody needs to be told about mid-match.
+    void this.sfx.loadSamples().then((report) => {
+      if (import.meta.env.DEV && report.fellBack.length > 0) {
+        console.warn('[audio] using synthesised clips for:', report.fellBack);
+      }
+    });
     // Watch the store rather than having the game loop relay it: the HUD toggle
     // is the only writer, and comparing against the bank's own state keeps the
     // 10 Hz HUD publishes from reassigning the gain every tick.
@@ -651,13 +649,7 @@ export class ArenaScene extends Phaser.Scene {
           const aim = world.players.aim[ev.a] ?? 0;
           const mx = (ev.x + Math.cos(aim) * 0.75) * PX_PER_M;
           const my = (ev.y + Math.sin(aim) * 0.75) * PX_PER_M;
-          this.sfxAt(
-            SHOT_SFX[ev.b] ?? SfxId.ShotLight,
-            ev.x,
-            ev.y,
-            1,
-            ArenaScene.wobble(world.tick, ev.a),
-          );
+          this.sfxAt(shotSfx(ev.b as WeaponId), ev.x, ev.y, 1, ArenaScene.wobble(world.tick, ev.a));
           const flash = this.add.image(mx, my, ATLAS, Frames.Muzzle).setDepth(9);
           this.tweens.add({
             targets: flash,

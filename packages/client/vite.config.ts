@@ -9,7 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // m4a included deliberately: the weapon samples are part of the offline
+        // guarantee, and a PWA that installs without them plays a silent match.
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2,m4a}'],
         // The whole game must run offline; Phaser chunks are large.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },

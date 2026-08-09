@@ -1,9 +1,17 @@
 /**
  * Procedural sound synthesis.
  *
- * Every clip is generated from code at boot. Aerocade ships no audio files for
- * the same reason it ships no image files ([ADR-001](../../../../../docs/DECISIONS.md)):
- * originality by construction, and a PWA precache that stays tiny.
+ * Every clip is generated from code at boot, and this remains the **floor** for
+ * every sound in the game: `SoundBank` fills its whole buffer map from here
+ * before any file is fetched, so a match is fully audible with nothing loaded.
+ *
+ * Recorded samples are layered over the top where they are better
+ * ([ADR-030](../../../../../docs/DECISIONS.md)), which is a change from the
+ * original position of shipping no audio files at all ([ADR-001](../../../../../docs/DECISIONS.md)).
+ * What that ADR bought is kept regardless: a sample that is missing, 404s, or
+ * hits a codec the browser cannot decode falls back to the clip below it rather
+ * than going silent, so the synthesis is not dead weight — it is the reason the
+ * files are safe to depend on.
  *
  * This module is deliberately **pure and DOM-free** — it returns raw mono
  * sample data and knows nothing about Web Audio — so the synthesis can be unit
@@ -21,13 +29,23 @@
  */
 
 export const SfxId = {
-  /** Pistol and SMG: tight, dry crack. */
-  ShotLight: 'shot-light',
+  /**
+   * One firing sound per weapon, no sharing. Two guns that share a clip read as
+   * the same gun no matter how differently they behave, and the roster has two
+   * pairs that used to do exactly that.
+   *
+   * The numbers each one is built from are bounded by its `cycleTime`
+   * (weapon-defs.ts): a clip whose loud part outlasts the fire interval overlaps
+   * itself at full auto and smears into noise. The Vortex SMG cycles every 90 ms,
+   * which is the tightest budget in the roster and why its clip is the shortest.
+   */
+  ShotPistol: 'shot-pistol',
+  ShotSmg: 'shot-smg',
   ShotRifle: 'shot-rifle',
   ShotShotgun: 'shot-shotgun',
   ShotSniper: 'shot-sniper',
-  /** Thumper and Lobber: a deep launch whump, no crack. */
-  ShotLauncher: 'shot-launcher',
+  ShotThumper: 'shot-thumper',
+  ShotLobber: 'shot-lobber',
   Explosion: 'explosion',
   /** Hitmarker tick — feedback that a shot connected. */
   Hit: 'hit',
@@ -277,45 +295,80 @@ function jetLoop(sampleRate: number): Float32Array {
  */
 export function renderSfx(sampleRate: number): Record<SfxId, Float32Array> {
   return {
-    [SfxId.ShotLight]: gunshot(sampleRate, {
+    // Rivet Pistol (0.28 s cycle, 16 dmg): a tight dry snap, mid-bodied. The
+    // reference point the rest are heard against.
+    [SfxId.ShotPistol]: gunshot(sampleRate, {
       seconds: 0.16,
-      tau: 0.035,
-      bodyHz: 210,
-      bright: 0.55,
+      tau: 0.034,
+      bodyHz: 232,
+      bright: 0.58,
       drive: 1.5,
       seed: 0x511,
     }),
+    // Vortex SMG (0.09 s cycle, 9 dmg): the shortest and thinnest in the roster.
+    // Held down it becomes a texture rather than seven separate shots, so it is
+    // deliberately small — a fuller clip here just muddies itself.
+    [SfxId.ShotSmg]: gunshot(sampleRate, {
+      seconds: 0.082,
+      tau: 0.016,
+      bodyHz: 305,
+      bright: 0.74,
+      drive: 1.3,
+      seed: 0x516,
+    }),
+    // Pulse Rifle (0.14 s cycle, 14 dmg): the energy outlier. Low `bright` with a
+    // high body leaves a tuned zap instead of a powder crack, which is the one
+    // weapon in the roster that should not sound like a firearm.
     [SfxId.ShotRifle]: gunshot(sampleRate, {
-      seconds: 0.22,
-      tau: 0.05,
-      bodyHz: 165,
-      bright: 0.45,
-      drive: 1.8,
+      seconds: 0.13,
+      tau: 0.032,
+      bodyHz: 268,
+      bright: 0.3,
+      drive: 2.0,
       seed: 0x512,
     }),
+    // Scattergun (0.85 s cycle, 8 pellets): low and broad, the pellets read as
+    // one wide blast rather than eight events.
     [SfxId.ShotShotgun]: gunshot(sampleRate, {
       seconds: 0.36,
       tau: 0.1,
-      bodyHz: 110,
+      bodyHz: 104,
       bright: 0.3,
       drive: 2.2,
       seed: 0x513,
     }),
+    // Longbolt Rifle (1.5 s cycle, 70 dmg): the loudest and longest. It gets the
+    // tail budget the automatics cannot afford, which is most of what sells a
+    // one-shot weapon.
     [SfxId.ShotSniper]: gunshot(sampleRate, {
-      seconds: 0.5,
-      tau: 0.14,
-      bodyHz: 132,
-      bright: 0.6,
-      drive: 2.6,
+      seconds: 0.55,
+      tau: 0.15,
+      bodyHz: 140,
+      bright: 0.62,
+      drive: 2.8,
       seed: 0x514,
     }),
-    [SfxId.ShotLauncher]: gunshot(sampleRate, {
-      seconds: 0.4,
-      tau: 0.13,
-      bodyHz: 74,
-      bright: 0.12,
+    // Thumper (1.1 s cycle, explosive projectile): a deep launch whump with the
+    // crack almost entirely removed — it throws a shell, it does not shoot.
+    [SfxId.ShotThumper]: gunshot(sampleRate, {
+      seconds: 0.42,
+      tau: 0.145,
+      bodyHz: 66,
+      bright: 0.09,
       drive: 1.9,
       seed: 0x515,
+    }),
+    // Lobber (0.75 s cycle, projectile): the same family as the Thumper but
+    // hollow and higher — a lighter tube lobbing a lighter shell. Separated from
+    // it on pitch, length and decay together, because one axis is not enough to
+    // tell two launchers apart.
+    [SfxId.ShotLobber]: gunshot(sampleRate, {
+      seconds: 0.28,
+      tau: 0.082,
+      bodyHz: 98,
+      bright: 0.17,
+      drive: 1.6,
+      seed: 0x517,
     }),
     [SfxId.Explosion]: explosion(sampleRate),
     [SfxId.Hit]: tick(sampleRate, 1650, 0.022, 0.15, 0x00417),

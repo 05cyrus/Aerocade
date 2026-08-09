@@ -54,9 +54,10 @@ flowchart LR
 ```
 
 - **`BootScene`** — runs once. Generates every texture and audio buffer procedurally (below),
-  registers them under stable keys, then starts `ArenaScene`. There is no loading bar for
-  network assets because there are no network assets; generation completes in well under a
-  second on target hardware.
+  registers them under stable keys, then starts `ArenaScene`. There is still no loading bar:
+  generation completes in well under a second on target hardware, and the recorded weapon
+  samples (ADR-030) are fetched _after_ the scene is already audible, so nothing waits on
+  them — a sample that never arrives leaves the generated clip playing in its place.
 - **`ArenaScene`** — renders one match. On create it builds the static tilemap for the current
   map (e.g. Foundry, 48×27 tiles), allocates all sprite/emitter pools at full capacity, wires
   the camera, and subscribes to the sim. On shutdown it releases pools and unsubscribes.

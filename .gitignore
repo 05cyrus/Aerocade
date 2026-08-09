@@ -7,3 +7,9 @@ coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo
+
+# Licensed sample pack: 65 MB of source WAVs, and third-party material that this
+# repo should not redistribute. The small mono clips baked from it under
+# packages/client/public/sfx/ ARE committed, so a build needs the pack only when
+# the bake is re-run (see packages/client/scripts/bake-audio.mjs).
+assets/Free Sounds Pack/

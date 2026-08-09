@@ -831,6 +831,109 @@ and plain-language failures are in. QR share, the `contacting bridge → … →
 breakdown and the RTC-vs-relay badge are not — the badge in particular has nothing to report until
 the WebRTC transport exists.
 
+## ADR-030: Recorded samples over a procedural floor, one clip per weapon
+
+The roster had seven weapons and five firing sounds: the Rivet Pistol and Vortex SMG shared
+`shot-light`, the Thumper and Lobber shared `shot-launcher`. Two guns that share a clip read as the
+same gun however differently they behave, so the roster sounded smaller than it is. A licensed sample
+pack was supplied to fix it.
+
+**Every weapon gets its own clip, and the mapping is tested rather than heard.** `SHOT_SFX` lives in
+`weapon-sfx.ts` — its own module, free of Phaser — precisely so the invariant can be asserted in a
+unit test instead of discovered by ear in a running game. Three tests hold it: one-clip-per-weapon
+with no duplicates, every clip inside its weapon's `cycleTime`, and pairwise separation across all 21
+weapon pairs on at least two of {duration, brightness, loudness, decay}. That last one exists because
+two clips differing only in length are still the same gun to a player — "distinct" has to mean more
+than trimmed.
+
+**`cycleTime` is a hard budget, not a style guide.** A clip whose loud part outlasts the fire interval
+overlaps itself at full auto and smears into noise. The Vortex SMG cycles every **90 ms** and the Pulse
+Rifle every **140 ms**, which is why those two clips are the shortest in the roster and why the
+Longbolt (1.5 s) gets the long tail — most of what sells a one-shot weapon is decay the automatics
+cannot afford. Both the synthesised and the baked side are checked against these numbers.
+
+**This reverses part of ADR-001, deliberately and partially.** That decision shipped no asset files at
+all: originality by construction, and a tiny precache. Recorded audio gives up the first for the
+weapons and keeps the second (the whole baked set is a small fraction of one Phaser chunk). What it
+must not give up is robustness, so:
+
+**The synthesis is not replaced — it is the floor.** `SoundBank` fills its entire buffer map from
+`renderSfx` in its constructor, synchronously, before any network call. Samples are then fetched over
+the top and _replace_ buffers as they decode. A sample that 404s, decodes to zero frames, or hits a
+codec the browser cannot handle leaves a working sound in place; each id fails independently, and the
+loader never rejects. This is what makes shipping files safe rather than a new way for the game to go
+quiet — and it means the licensing question has a complete fallback: delete `public/sfx/`, empty the
+manifest, and the game reverts with no other code change.
+
+**AAC in `.m4a`, mono, 64 kbps.** Chosen for the widest `decodeAudioData` support — Opus would be
+smaller but is the weaker bet in Safari. The real worry with AAC was encoder priming pushing the
+transient later, which would make every gun feel late; measured in Chrome against the source WAV, the
+onset landed on the **identical sample**, so the edit list is honoured and there is no delay to
+compensate for. Everything is mono because `spatial()` derives pan from world geometry, and a stereo
+sample would fight the panner and put one shot in two places at once.
+
+**What actually shipped: the seven weapons.** All 7 firing sounds are baked from the pack and
+committed — 30.6 KB for the set, 1.6% of the 1.86 MB precache. Verified in a real browser by
+fingerprinting each played buffer against the file on disk: all 7 weapons play their sample, and all 7
+are distinct buffers. Independently re-measured after baking, all 21 pairs clear the same rule the
+synth is held to; the two pairs that used to share a clip are now far apart (Pistol vs SMG 1.93x in
+duration and 2.71x in spectral centroid; Thumper vs Lobber 2.45x in duration and 1.53x in
+body-over-air tilt). The weakest pair is Longbolt vs Thumper, separated on duration and level but not
+timbre — two big deep guns, and the honest floor of what three source recordings can do.
+
+The other nine event sounds (explosion, hit, death, reload, dry fire, grenade bounce, whoosh, pickup,
+pad respawn) are **designed but not baked**: source, trim target, band shape and level are chosen and
+recorded, and they still play their synthesised clips. `SfxId.JetLoop` is deliberately excluded
+forever — see below.
+
+**The jetpack loop stays synthesised, and this is measured rather than assumed.** The pack's usable
+fire-loop window is 49,486 samples; after the same AAC encode it decodes to 50,176 (+690 samples,
+15.6 ms of padding), and a decoder ignoring the edit list returns 51,200 (+1,714, 38.9 ms) with the
+first 30 ms coming back 10.4 dB quieter because of AAC's priming ramp. `setJet` loops with
+`source.loop = true` and no crossfade, so that padding is a periodic dropout — an audible tick at
+roughly 0.89 Hz for as long as the jetpack is held. No bake gate catches it: the priming ramp sits
+below the -40 dB silence detector, and the length check does not look at loop seams. Seamless looping
+is the one thing a hand-built buffer does that a lossy codec cannot.
+
+**Levels are matched per clip to the synth peak they replace.** Because fallback is per-id, one match
+can legitimately play samples for some sounds and synthesis for others — so if the two disagreed on
+loudness, a missing file would change the mix rather than just the timbre. Verified: with the Longbolt
+404'd and the Thumper corrupted, those two fell back to synthesis, the other five kept their samples,
+the game kept playing, and all seven were still distinct.
+
+**One design number had to change on measurement.** The Lobber was specified at 0.5x pitch; at that
+stretch the source's attack takes 13 ms to cross -40 dBFS, which would make it feel _later_ than the
+synthesised clip it replaces (that one starts at full amplitude, 0 ms). Pitching to 0.63x lands the
+onset at 8.4 ms and keeps 21.9 dB of body-over-air tilt against 23.0 — still the darkest clip in the
+roster. Trimming later did not help and cost peak level, which is what identified the attack rather
+than residual silence as the cause.
+
+**Baked at authoring time by a committed script, not at runtime.** Every transform (trim, pitch,
+filter, normalise) is deterministic, so doing it once makes the result reviewable — you can listen to
+exactly what ships. The outputs and the generated manifest are committed, so an ordinary build and an
+ordinary clone need neither ffmpeg nor the 65 MB pack. The manifest is generated rather than
+hand-written because a hand-maintained list is one rename away from a 404 that hides behind the
+fallback, which is the kind of quality regression nobody notices.
+
+**Trimming leading silence is the single most important step.** Every source clip in the pack opens on
+silence — 43 ms on `Gunshot 1-1`, 89 ms on `Draw Weapon Metal`, 107 ms on `Rock Impact 37`. Shipped
+untrimmed they would all fire late, and "the guns feel laggy" is a symptom that points at input
+handling or the network rather than at the audio. The bake therefore fails the build above 10 ms; the
+shipped set measures 0 ms on six of seven clips and 8 ms on the Lobber.
+
+**Two things this cost that are worth recording.** The bake's own guards were wrong on the first
+attempt: `execFileSync` returns stdout while ffmpeg's analysis filters write to **stderr**, so both
+checks were parsing an empty string and passing everything — a broken guard is worse than no guard,
+and it was only caught by feeding it a file known to be defective. Separately, `asetrate` rescales the
+timebase, so time-based `afade` arguments land in the wrong place after a pitch shift; fades on pitched
+clips must be sample-indexed.
+
+**The pack's licence is not on disk.** 50 WAVs, no licence, EULA or readme, and no embedded rights
+metadata in any of them (verified at the byte level — no `LIST`, `bext` or `iXML` chunk). It is
+described as a free Fab pack, which is not corroborated by the files. Absence of a licence is not
+evidence of permissive terms, so the terms need retrieving and archiving before a build is distributed
+publicly. See [assets/README.md](../assets/README.md).
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

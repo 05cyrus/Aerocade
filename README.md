@@ -32,7 +32,7 @@ Honest status per milestone (full plan in [docs/roadmap.md](docs/roadmap.md)):
 | Weapon pads: fixed spots, random guns, timed respawn                        | M3        | Done                                                                                                     |
 | Full roster + lag compensation                                              | M3        | Partial — 7 weapons, grenades, melee, health/ammo pads done; Arclight Beam, Emberjet and lag comp remain |
 | Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen      | M4        | Planned                                                                                                  |
-| Procedurally generated sound: weapons, explosions, jetpack loop, mute       | M5        | Done                                                                                                     |
+| Sound: one clip per weapon, explosions, jetpack loop, mute                  | M5        | Done — 7 recorded weapon samples over a procedural floor; other events still synthesised                 |
 | Mobile twin-stick touch controls (dynamic sticks, button cluster)           | M5        | Done                                                                                                     |
 | Settings + full keybind remapping, persisted to IndexedDB                   | M5        | Done                                                                                                     |
 | Gamepad support (standard mapping: sticks, triggers, D-pad, face buttons)   | M5        | Done                                                                                                     |

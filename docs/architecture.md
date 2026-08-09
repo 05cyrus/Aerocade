@@ -10,7 +10,10 @@ Aerocade is an original browser-based 2D side-view jetpack arena shooter, playab
 - **LAN-first multiplayer with zero infrastructure.** One device runs the bridge; up to 8 players join from any modern browser on the Wi-Fi. No internet, no signup, no certificates.
 - **Host-in-browser authority.** Any player's browser — including a phone — can host the authoritative sim. The Node bridge stays game-logic-free (ADR-006).
 - **Smooth on mid-range Android.** Zero allocation during a match, fixed pools, interpolated rendering at display rate.
-- **Original everything.** All art, audio, maps, tuning values, names, and UI are original works (ADR-001).
+- **Original everything, with one recorded exception.** All art, maps, tuning values, names and UI are
+  original works (ADR-001). Audio is original synthesis _plus_ a licensed sample pack layered over it
+  for the weapons (ADR-030); the synthesis remains the fallback for every sound, so the game is still
+  fully playable on original assets alone.
 
 ### Non-goals
 

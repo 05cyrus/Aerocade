@@ -226,7 +226,7 @@ bench('foundry, 8 players, combat-heavy script', () => {
 | -------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | Phaser rendering internals                               | Third-party, canvas/WebGL, no DOM in jsdom; mocking Phaser tests the mock | Manual checklist + e2e smoke (canvas exists, no console errors) |
 | Visual output (sprites, particles, screen shake)         | Pixel assertions are flaky and freeze art iteration                       | Manual playtest checklist per milestone                         |
-| Audio                                                    | Web Audio unavailable headless; "sounds right" is human judgment          | Manual checklist (M5)                                           |
+| Audio                                                    | "sounds right" is human judgment; the rest is measurable                  | Unit tests + a headless browser check, then a manual pass       |
 | Real device input feel (touch latency, stick ergonomics) | Emulation lies about touch                                                | Device-matrix playtest (M5)                                     |
 | Real Wi-Fi behavior (AP isolation, roaming)              | Not reproducible in CI                                                    | Documented manual LAN test in [networking.md](networking.md)    |
 

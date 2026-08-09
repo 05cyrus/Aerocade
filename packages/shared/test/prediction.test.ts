@@ -431,3 +431,22 @@ describe('a projected position must not be stuck in the floor', () => {
     expect(depenetrate(world.map, x, deep)).toBe(deep);
   });
 });
+
+describe('a client must have a per-tick event lifecycle', () => {
+  it('does not let predicted events pile up', () => {
+    // Regression. `stepWorld` clears the event buffer each tick and a client never
+    // calls it, so before this every predicted event stayed in the buffer forever
+    // — and `ArenaScene.applyEvents` re-fires the whole buffer every tick, turning
+    // one gunshot into a 60 Hz drone until the buffer saturated at MAX_EVENTS.
+    const { client, session, press } = rig();
+    const firing = press({ buttons: Buttons.Fire });
+
+    let peak = 0;
+    for (let i = 0; i < 40; i++) {
+      session.sendInput(firing);
+      peak = Math.max(peak, client.events.count);
+    }
+    // A single tick's worth, not forty ticks' worth.
+    expect(peak, 'the buffer holds one tick of events').toBeLessThan(8);
+  });
+});

@@ -1,4 +1,10 @@
-import { MAX_PICKUPS, MAX_PLAYERS, MAX_PROJECTILES, WEAPON_SLOTS } from '../constants.js';
+import {
+  MAX_EVENTS,
+  MAX_PICKUPS,
+  MAX_PLAYERS,
+  MAX_PROJECTILES,
+  WEAPON_SLOTS,
+} from '../constants.js';
 import { Buttons } from '../sim/input.js';
 import type { SimWorld } from '../sim/world.js';
 import { PROTOCOL_VERSION } from './messages.js';
@@ -661,6 +667,88 @@ export function decodeJoinRequest(bytes: Uint8Array): JoinRequest {
   const nameLength = Math.min(view.getUint8(3), MAX_NAME_BYTES);
   const name = new TextDecoder().decode(bytes.subarray(4, 4 + nameLength));
   return { protocolVersion: view.getUint16(1, true), name };
+}
+
+/**
+ * Sim events for one tick, host → client.
+ *
+ * Carries `SimEvent` records verbatim rather than the per-type payloads sketched
+ * in docs/networking.md §5.3. That sketch predates the event buffer and described
+ * a lobby feed (joined/left/chat); three of its types are now served better
+ * elsewhere — the roster publishes joins and leaves (ADR-032) and every snapshot
+ * carries the match state (ADR-031) — while none of them covered the thing that
+ * actually matters here: gunfire, impacts and explosions belonging to *other*
+ * players.
+ *
+ * Carrying the buffer verbatim means `ArenaScene.applyEvents` needs no change at
+ * all: a client's `world.events` ends up holding the same records a host's does,
+ * so remote players sound and look like local ones for free.
+ */
+export interface EventBatch {
+  tick: number;
+  events: SimEventRecord[];
+}
+
+/** One event on the wire; mirrors `SimEvent` in sim/events.ts. */
+export interface SimEventRecord {
+  type: number;
+  a: number;
+  b: number;
+  x: number;
+  y: number;
+  r: number;
+}
+
+/** type u8 + a i16 + b i16 + x u16 + y u16 + r u16. */
+const EVENT_RECORD_BYTES = 11;
+
+export function encodeEvents(batch: EventBatch): Uint8Array {
+  const events = batch.events.slice(0, MAX_EVENTS);
+  const bytes = new Uint8Array(1 + 4 + 1 + events.length * EVENT_RECORD_BYTES);
+  const view = new DataView(bytes.buffer);
+  view.setUint8(0, MsgId.Event);
+  view.setUint32(1, batch.tick >>> 0, true);
+  view.setUint8(5, events.length);
+  let at = 6;
+  for (const ev of events) {
+    view.setUint8(at, ev.type & 0xff);
+    // Signed: `a` and `b` carry NO_PLAYER (-1) for a world kill, a frag grenade's
+    // absent weapon, and an undecided winner. Unsigned would decode those as 255.
+    view.setInt16(at + 1, clampI16(ev.a), true);
+    view.setInt16(at + 3, clampI16(ev.b), true);
+    view.setUint16(at + 5, encodePos(ev.x), true);
+    view.setUint16(at + 7, encodePos(ev.y), true);
+    view.setUint16(at + 9, encodePos(ev.r), true);
+    at += EVENT_RECORD_BYTES;
+  }
+  return bytes;
+}
+
+export function decodeEvents(bytes: Uint8Array): EventBatch {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint8(0) !== MsgId.Event) throw new Error('not an event batch');
+  const tick = view.getUint32(1, true);
+  const count = view.getUint8(5);
+  const events: SimEventRecord[] = [];
+  let at = 6;
+  for (let i = 0; i < count; i++) {
+    // Truncated frames stop the walk: this arrives from the network.
+    if (at + EVENT_RECORD_BYTES > bytes.length) break;
+    events.push({
+      type: view.getUint8(at),
+      a: view.getInt16(at + 1, true),
+      b: view.getInt16(at + 3, true),
+      x: decodePos(view.getUint16(at + 5, true)),
+      y: decodePos(view.getUint16(at + 7, true)),
+      r: decodePos(view.getUint16(at + 9, true)),
+    });
+    at += EVENT_RECORD_BYTES;
+  }
+  return { tick, events };
+}
+
+function clampI16(value: number): number {
+  return Math.max(-32768, Math.min(32767, Math.trunc(value)));
 }
 
 /** One player's identity — everything about them that is not simulated. */

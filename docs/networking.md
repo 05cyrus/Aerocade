@@ -230,8 +230,21 @@ on the 30 Hz channel would spend a kilobyte a second repeating them. They are al
 
 ### 5.3 `H2C_EVENT` — host → client, reliable
 
-`msgId u8 (0x03), eventType u8, tick u32, payload`. Event types: `PLAYER_JOINED`, `PLAYER_LEFT`,
-`SPAWN`, `DEATH (killerId u8, victimId u8, weaponId u8, flags u8)`, `PICKUP_TAKEN`,
+**As implemented** (ADR-034): `msgId u8 (0x03), tick u32, count u8`, then `count` records of
+`type u8, a i16, b i16, x u16, y u16, r u16` — the sim's own `SimEvent` shape, verbatim.
+
+The original sketch below predates the event buffer and describes a lobby feed. Joins and leaves are
+now the roster's job (§5.2b), match state rides every snapshot, and chat does not exist — while none of
+those types covered the thing that actually matters: gunfire, impacts and explosions belonging to
+_other_ players. Carrying the buffer verbatim means the renderer needs no change: a client's
+`world.events` holds the same records a host's does.
+
+Sent every tick (these are one-shot announcements; batching two ticks would fire both at once).
+`Trace` is excluded — eight per Scattergun shot, and derivable from the `Shot`. A client discards
+events it predicted for itself, or every local shot would play twice.
+
+_Original sketch:_ `msgId u8 (0x03), eventType u8, tick u32, payload`. Event types: `PLAYER_JOINED`,
+`PLAYER_LEFT`, `SPAWN`, `DEATH (killerId u8, victimId u8, weaponId u8, flags u8)`, `PICKUP_TAKEN`,
 `MATCH_STATE (phase u8, timeLeft u16)`, `CHAT (len-prefixed UTF-8, ≤120 B)`.
 
 ### 5.4 `JOIN_REQ` / `WELCOME` — reliable, once per connection

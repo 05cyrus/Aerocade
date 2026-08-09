@@ -1,5 +1,6 @@
 import {
   applyDelta,
+  decodeEvents,
   decodeRoster,
   decodeSnapshot,
   decodeWelcome,
@@ -10,10 +11,13 @@ import {
   peekMsgId,
   type InputFrame,
   type RosterEntry,
+  type SimEventRecord,
   type WireSnapshot,
 } from '../protocol/codec.js';
 import { PROTOCOL_VERSION } from '../protocol/messages.js';
 import type { SimWorld } from '../sim/world.js';
+import { MAX_EVENTS } from '../constants.js';
+import { SimEventType } from '../sim/events.js';
 import { applySnapshotToWorld } from './apply-snapshot.js';
 import { predictPlayer } from '../sim/predict.js';
 import { isNewerSeq } from './host-session.js';
@@ -39,6 +43,20 @@ const INPUT_HISTORY = 3;
  * bounded so a stalled host cannot grow it without limit.
  */
 const PENDING_CAPACITY = 128;
+
+/**
+ * Events a client produces for itself by predicting, so the host's copy is a
+ * duplicate. Everything the client does *not* predict — damage, death,
+ * explosions, pickups, match phase — must be accepted even about us.
+ */
+const SELF_PREDICTED_EVENTS: ReadonlySet<number> = new Set([
+  SimEventType.Shot,
+  SimEventType.DryFire,
+  SimEventType.ReloadStart,
+  SimEventType.MeleeSwing,
+  SimEventType.GrenadeThrow,
+  SimEventType.Trace,
+]);
 
 /** A prediction is "right" within a centimetre and five centimetres a second. */
 const POSITION_TOLERANCE_M = 0.01;
@@ -87,6 +105,8 @@ export class ClientSession {
   private readonly names = new Map<number, string>();
   /** Inputs sent but not yet acknowledged, oldest first. */
   private pending: PendingInput[] = [];
+  /** Host events waiting for the next predicted tick to hand them to the renderer. */
+  private readonly inbox: SimEventRecord[] = [];
   private mispredictions = 0;
   /** Visual error left by the last correction, decayed over `SMOOTHING_TICKS`. */
   private smoothX = 0;
@@ -135,6 +155,36 @@ export class ClientSession {
     if (id === MsgId.Welcome) this.handleWelcome(bytes);
     else if (id === MsgId.Snapshot) this.handleSnapshot(bytes);
     else if (id === MsgId.Roster) this.handleRoster(bytes);
+    else if (id === MsgId.Event) this.handleEvents(bytes);
+  }
+
+  /**
+   * Queue the host's events for the next predicted tick.
+   *
+   * Queued rather than written straight into `world.events`, because events
+   * arrive asynchronously between ticks and the tick itself clears the buffer —
+   * writing directly would let a tick erase events that arrived a moment before
+   * it, dropping exactly the sounds this message exists to deliver.
+   *
+   * Events the client predicts for itself are discarded: it has already played
+   * its own gunshot, and accepting the host's copy would double every shot the
+   * local player fires. Anything the client does *not* predict — damage, deaths,
+   * explosions, pickups, the match phase — is kept even when it is about us,
+   * because there is no local copy of those to duplicate.
+   */
+  private handleEvents(bytes: Uint8Array): void {
+    let batch;
+    try {
+      batch = decodeEvents(bytes);
+    } catch {
+      return;
+    }
+    for (const ev of batch.events) {
+      if (ev.a === this.localPlayer && SELF_PREDICTED_EVENTS.has(ev.type)) continue;
+      this.inbox.push(ev);
+      // Bounded: a burst must not grow this without limit if ticks stop arriving.
+      if (this.inbox.length > MAX_EVENTS) this.inbox.shift();
+    }
   }
 
   /**
@@ -355,6 +405,19 @@ export class ClientSession {
   private predictLocally(frame: InputFrame): void {
     const slot = this.localPlayer;
     if (slot < 0 || this.world.players.connected[slot] !== 1) return;
+
+    // A client's tick has to do what `stepWorld` does for a host: start the event
+    // buffer empty. Nothing else clears it, and the renderer replays whatever it
+    // finds every tick — so without this one gunshot becomes a 60 Hz drone until
+    // the buffer saturates.
+    this.world.events.clear();
+    // Then the host's events for this frame, before our own prediction adds to
+    // them, so the renderer sees one coherent tick.
+    for (const ev of this.inbox) {
+      this.world.events.emit(ev.type as SimEventType, ev.a, ev.b, ev.x, ev.y, ev.r);
+    }
+    this.inbox.length = 0;
+
     const p = this.world.players;
     const prevButtons = p.prevButtons[slot] ?? 0;
 

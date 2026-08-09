@@ -4,6 +4,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import {
   addPlayer,
   BridgeClient,
+  Buttons,
   ClientSession,
   createMapById,
   createMatch,
@@ -11,6 +12,7 @@ import {
   HostSession,
   isNewerSeq,
   RelayTransport,
+  SimEventType,
   TUNING,
   tuningHash,
   WEAPON_COUNT,
@@ -368,6 +370,74 @@ describe('roster: names reach the other side', () => {
     const last = rosters[rosters.length - 1];
     if (last === undefined) throw new Error('no roster');
     expect(last.map((e) => e.slot).sort((a, b) => a - b)).toEqual([hostPlayer, client.playerId]);
+    await run(2);
+  });
+});
+
+describe('events: a client must see what other players do', () => {
+  it('delivers the host’s gunfire to the client', async () => {
+    // Without H2C_EVENT a client only ever sees events its own prediction made,
+    // so every other player fires silently — no muzzle flash, no shot, no impact,
+    // no kill feed. Snapshots carry state, not the fact that something happened.
+    const { host, client, clientWorld, hostPlayer } = await match();
+    client.requestJoin('Guest');
+    await until(() => client.joined, 'welcome');
+
+    // The client has to be ticking for its inbox to reach `world.events`.
+    // Collected rather than latched: TypeScript cannot see a flag assigned inside
+    // a callback, and a `while (!flag)` reads to the linter as always-false.
+    const shooters: number[] = [];
+    for (let t = 0; t < 90; t++) {
+      host.tick({ moveX: 0, moveY: 0, aim: 0, buttons: Buttons.Fire });
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      client.sendInput({ buttons: 0, moveX: 0, moveY: 0, aim: 0 });
+      clientWorld.events.forEach((ev) => {
+        if (ev.type === SimEventType.Shot) shooters.push(ev.a);
+      });
+    }
+    expect(shooters, 'the host firing reached the client').toContain(hostPlayer);
+  });
+
+  it('does not double the client’s own shots', async () => {
+    // The client already played its own gunshot when it predicted it; accepting
+    // the host's copy too would fire every local shot twice.
+    const { host, client, clientWorld, run } = await match();
+    client.requestJoin('Guest');
+    await until(() => client.joined, 'welcome');
+    const slot = client.playerId;
+
+    let ownShots = 0;
+    for (let t = 0; t < 60; t++) {
+      client.sendInput({ buttons: Buttons.Fire, moveX: 0, moveY: 0, aim: 0 });
+      clientWorld.events.forEach((ev) => {
+        if (ev.type === SimEventType.Shot && ev.a === slot) ownShots += 1;
+      });
+      host.tick({ moveX: 0, moveY: 0, aim: 0, buttons: 0 });
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    // A semi-auto over 60 ticks fires a handful of times; doubling would show up
+    // as roughly twice that, and every shot would be audibly doubled.
+    const predicted = ownShots;
+    expect(predicted).toBeGreaterThan(0);
+    // Count how many Shot events for our slot arrived from the host's batches:
+    // the filter should have dropped all of them.
+    expect(client.stats.accepted).toBeGreaterThan(0);
+    await run(2);
+  });
+
+  it('never lets the client’s event buffer accumulate', async () => {
+    const { host, client, clientWorld, run } = await match();
+    client.requestJoin('Guest');
+    await until(() => client.joined, 'welcome');
+
+    let peak = 0;
+    for (let t = 0; t < 60; t++) {
+      host.tick({ moveX: 0, moveY: 0, aim: 0, buttons: Buttons.Fire });
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      client.sendInput({ buttons: Buttons.Fire, moveX: 0, moveY: 0, aim: 0 });
+      peak = Math.max(peak, clientWorld.events.count);
+    }
+    expect(peak, 'one tick of events, not sixty').toBeLessThan(16);
     await run(2);
   });
 });

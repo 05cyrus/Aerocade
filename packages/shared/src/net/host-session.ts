@@ -3,15 +3,18 @@ import {
   captureSnapshot,
   decodeInput,
   encodeSnapshot,
+  encodeEvents,
   encodeRoster,
   encodeWelcome,
   decodeJoinRequest,
   MsgId,
   type RosterEntry,
+  type SimEventRecord,
   peekMsgId,
   type WireSnapshot,
 } from '../protocol/codec.js';
 import { PROTOCOL_VERSION } from '../protocol/messages.js';
+import { SimEventType } from '../sim/events.js';
 import { addPlayer, removePlayer } from '../sim/spawns.js';
 import { assignTeam } from '../sim/match.js';
 import { stepWorld } from '../sim/step.js';
@@ -262,7 +265,35 @@ export class HostSession {
 
     stepWorld(this.world);
 
+    // Events go out every tick, not on the snapshot cadence: they are one-shot
+    // announcements (a shot, an impact, a death) and batching two ticks of them
+    // into one frame would fire both at the same instant.
+    this.broadcastEvents();
     if (this.world.tick % SNAPSHOT_EVERY_TICKS === 0) this.broadcastSnapshot();
+  }
+
+  /**
+   * Send this tick's sim events to every client.
+   *
+   * Without this a client only ever sees events its *own* prediction produced,
+   * which covers only its own player — so every other player fires silently, with
+   * no muzzle flash, no tracer, no impact and no kill feed. Snapshots carry state,
+   * not the fact that something happened.
+   *
+   * `Trace` is excluded: the Scattergun emits one per pellet, eight per shot, and
+   * they exist purely to draw a tracer the client can derive from the `Shot` it
+   * already has. Sending them would triple this message for nothing.
+   */
+  private broadcastEvents(): void {
+    if (this.clients.size === 0) return;
+    const events: SimEventRecord[] = [];
+    this.world.events.forEach((ev) => {
+      if (ev.type === SimEventType.Trace) return;
+      events.push({ type: ev.type, a: ev.a, b: ev.b, x: ev.x, y: ev.y, r: ev.r });
+    });
+    if (events.length === 0) return;
+    const bytes = encodeEvents({ tick: this.world.tick, events });
+    this.transport.broadcast(Channel.Ctrl, bytes);
   }
 
   private broadcastSnapshot(): void {

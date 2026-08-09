@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SimEventType } from '../src/sim/events.js';
 import {
   applyDelta,
   assertEncodable,
@@ -8,17 +9,20 @@ import {
   createMatch,
   decodeAim,
   decodeInput,
+  decodeEvents,
   decodeJoinRequest,
   decodeRoster,
   decodeSnapshot,
   decodeWelcome,
   encodeAim,
   encodeInput,
+  encodeEvents,
   encodeJoinRequest,
   encodePos,
   encodeRoster,
   encodeSnapshot,
   encodeVel,
+  type SimEventRecord,
   encodeWelcome,
   INPUT_BYTES,
   KEYFRAME,
@@ -410,5 +414,61 @@ describe('roster', () => {
     // The whole point of sending it whole rather than as join/leave deltas.
     const full = Array.from({ length: 8 }, (_, i) => ({ slot: i, name: 'SixteenCharName!' }));
     expect(encodeRoster(full).length).toBeLessThan(200);
+  });
+});
+
+describe('event batches', () => {
+  const ev = (over: Partial<SimEventRecord> = {}): SimEventRecord => ({
+    type: SimEventType.Shot,
+    a: 1,
+    b: 2,
+    x: 10.5,
+    y: 20.25,
+    r: 0,
+    ...over,
+  });
+
+  it('round-trips a batch', () => {
+    const batch = {
+      tick: 12_345,
+      events: [ev(), ev({ type: SimEventType.Explosion, a: 3, b: -1, r: 3.25 })],
+    };
+    const decoded = decodeEvents(encodeEvents(batch));
+    expect(decoded.tick).toBe(12_345);
+    expect(decoded.events).toHaveLength(2);
+    expect(decoded.events[0]?.type).toBe(SimEventType.Shot);
+    expect(decoded.events[0]?.x).toBeCloseTo(10.5, 3);
+    expect(decoded.events[1]?.r).toBeCloseTo(3.25, 3);
+  });
+
+  it('keeps a negative actor negative', () => {
+    // NO_PLAYER (-1) means a world kill, a frag grenade's absent weapon, and an
+    // undecided winner. Unsigned would decode all three as 255.
+    const decoded = decodeEvents(encodeEvents({ tick: 1, events: [ev({ a: -1, b: -1 })] }));
+    expect(decoded.events[0]?.a).toBe(-1);
+    expect(decoded.events[0]?.b).toBe(-1);
+  });
+
+  it('handles an empty batch', () => {
+    expect(decodeEvents(encodeEvents({ tick: 9, events: [] }))).toEqual({ tick: 9, events: [] });
+  });
+
+  it('stops at a truncated frame instead of reading past the end', () => {
+    const full = encodeEvents({ tick: 4, events: [ev(), ev({ a: 5 })] });
+    for (let cut = 6; cut < full.length; cut++) {
+      const decoded = decodeEvents(full.subarray(0, cut));
+      expect(decoded.events.length, `cut at ${String(cut)}`).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('refuses a frame that is not an event batch', () => {
+    expect(() => decodeEvents(encodeRoster([{ slot: 0, name: 'x' }]))).toThrow();
+  });
+
+  it('caps a batch at the buffer size rather than overflowing the count byte', () => {
+    // count is a u8 and MAX_EVENTS is 128, so a saturated buffer must still fit.
+    const many = Array.from({ length: 400 }, () => ev());
+    const decoded = decodeEvents(encodeEvents({ tick: 1, events: many }));
+    expect(decoded.events.length).toBeLessThanOrEqual(128);
   });
 });

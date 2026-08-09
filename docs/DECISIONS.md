@@ -1096,6 +1096,50 @@ Lag compensation (§9) is untouched, so hitscan still resolves against present-t
 is no clock sync: the predicted tick is simply the snapshot tick plus the number of unacknowledged
 inputs, rather than §6's RTT-derived estimate.
 
+## ADR-034: Sim events are broadcast verbatim, and a client's tick owns their lifecycle
+
+A client's `world.events` was only ever filled by its own prediction, which covers only its own
+player — so every other player fired with no gunshot, no muzzle flash, no tracer, no impact and no
+kill feed. Snapshots carry state; they do not carry the fact that something happened. `MsgId.Event`
+(0x03) had been declared since ADR-026 and never encoded, decoded or sent.
+
+**The batch carries `SimEvent` records verbatim, not per-type payloads.** docs/networking.md §5.3
+sketched `PLAYER_JOINED / PLAYER_LEFT / SPAWN / DEATH / PICKUP_TAKEN / MATCH_STATE / CHAT`, which
+predates the event buffer and describes a lobby feed. Three of those are now served better elsewhere —
+the roster publishes joins and leaves (ADR-032), every snapshot carries the match state (ADR-031) —
+and none of them covered gunfire. Carrying the buffer verbatim means `ArenaScene.applyEvents` needs no
+change at all: a client's buffer ends up holding the same records a host's does, so remote players
+sound and look like local ones for free.
+
+**Every tick, not on the snapshot cadence.** These are one-shot announcements; batching two ticks into
+one frame would fire both at the same instant. `Trace` is excluded — the Scattergun emits one per
+pellet, eight per shot, and they exist only to draw a tracer the client can derive from the `Shot` it
+already has.
+
+**The client filters its own predicted events.** It has already played its own gunshot, so accepting
+the host's copy would double every local shot. Anything it does _not_ predict — damage, deaths,
+explosions, pickups, the match phase — is kept even when it is about us, because there is no local copy
+to duplicate.
+
+**Incoming events are queued, not written straight into the buffer.** They arrive asynchronously
+between ticks while the tick itself clears the buffer; writing directly would let a tick erase events
+that landed a moment before it, dropping exactly the sounds this message exists to deliver.
+
+**The bug this uncovered: a client had no event lifecycle at all.** `stepWorld` clears the buffer each
+tick and a client never calls it, so from the moment prediction landed (ADR-033) every predicted event
+stayed in the buffer forever — and `applyEvents` replays the whole buffer every tick, turning one
+gunshot into a 60 Hz drone until the buffer saturated at `MAX_EVENTS`. A client's tick now does what a
+host's does: clear, take the host's events for this frame, then predict. Caught by a test written
+before the fix, which failed at 14 accumulated events.
+
+**Not verified in a browser.** The Node coverage is real — a client provably receives the host's `Shot`
+events through the real bridge, its own shots are not doubled, and its buffer does not accumulate. But
+every attempt to confirm it in a headless browser this session failed to observe **any** `Shot` event,
+even in the offline sandbox, even with ammo demonstrably being spent by the same function that emits it
+three lines later. That contradicts the unit tests and I could not resolve whether it is a harness
+artefact (headless audio/instrumentation) or a real client-side regression. It should be confirmed by
+hand — open two browsers, fire, listen — before this is trusted.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

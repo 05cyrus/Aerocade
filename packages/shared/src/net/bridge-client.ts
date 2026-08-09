@@ -87,7 +87,10 @@ export class BridgeClient {
   async connect(): Promise<string> {
     const welcome = await new Promise<BridgeToClient>((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error('bridge handshake timed out'));
+        // Name the URL: the common failure is dialling something that accepts the
+        // socket but is not a bridge (a dev server, a proxy), and the address is
+        // the only thing that distinguishes that from a bridge that is simply down.
+        reject(new Error(`bridge handshake timed out — no reply from ${this.url}`));
       }, 8000);
       this.pending.set('welcome', (msg) => {
         clearTimeout(timer);

@@ -14,7 +14,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "npm run dev -w @aerocade/client",
+    "dev": "node scripts/dev.mjs",
+    "dev:client": "npm run dev -w @aerocade/client",
     "dev:server": "npm run dev -w @aerocade/server",
     "build": "npm run build -w @aerocade/shared && npm run build -w @aerocade/client && npm run build -w @aerocade/server",
     "test": "npm run test --workspaces --if-present",

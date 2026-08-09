@@ -1140,6 +1140,38 @@ three lines later. That contradicts the unit tests and I could not resolve wheth
 artefact (headless audio/instrumentation) or a real client-side regression. It should be confirmed by
 hand — open two browsers, fire, listen — before this is trusted.
 
+## ADR-035: A dev build looks for the bridge on port 8080, not on its own origin
+
+Reported symptom: `npm run dev`, click **Host LAN Match**, wait eight seconds, get
+"bridge handshake timed out".
+
+The cause is worse than a missing bridge. `bridgeUrl()` assumed the page was served _by_ the bridge —
+true in production, false in development, where Vite serves it on 5173. So the client dialled
+`ws://localhost:5173/ws`, and Vite **accepts the WebSocket upgrade** and then never answers the `hello`.
+An address that simply refused the connection would have failed instantly and pointed at itself; this
+one hangs for the full handshake timeout and then blames the handshake.
+
+**A dev build now guesses the bridge's default port on the same hostname.** The page's own origin is
+the one place the bridge certainly is not, so guessing 8080 (matching `PORT ?? 8080` in the server) is
+strictly better than a value known to be wrong. The hostname is kept, so a phone opening the dev server
+across the LAN still finds the bridge on that machine. `?bridge=host:port` still wins over everything,
+which is what the e2e tests use. Production is untouched: same origin, same port, `/ws`.
+
+**`npm run dev` now starts both processes.** Hosting needs the bridge, and a setup where the main dev
+command produces a game with a button that cannot work is a footgun regardless of what the README says.
+A ~60-line `scripts/dev.mjs` spawns both with prefixed output and takes the pair down together, rather
+than adding a task-runner dependency for something this small. `dev:client` and `dev:server` remain for
+running one.
+
+**The error message now names the address it tried.** "Handshake timed out" describes the mechanism;
+the address is the only thing that distinguishes "not a bridge" from "bridge is down", and it is what a
+player can act on.
+
+Seven tests cover the resolution — production origin, the dev guess, hostname preservation, override
+precedence in both modes, an empty `?bridge=`, `wss` on an https page, and one asserting the constant
+still matches the server's default. Verified end to end both ways: from the dev server two browsers now
+host and join (both see two players), and the bridge-served production build still uses its own origin.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

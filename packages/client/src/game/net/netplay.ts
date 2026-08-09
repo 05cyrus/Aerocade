@@ -40,16 +40,59 @@ export const LOCAL_TUNING_HASH = tuningHash(
 );
 
 /**
- * Where the bridge lives. Normally the PWA was served *by* the bridge, so its
- * own origin is right. `?bridge=host:port` overrides that, which is what makes
- * this reachable from the Vite dev server (and from tests) where the bridge is
- * a separate process.
+ * The bridge's default port, matching `PORT ?? 8080` in packages/server/src/main.ts.
+ * Only used to guess in development; a production page is served by the bridge
+ * itself and uses its own origin.
  */
-export function bridgeUrl(): string {
-  const override = new URLSearchParams(window.location.search).get('bridge');
-  const host = override ?? window.location.host;
-  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+export const DEV_BRIDGE_PORT = 8080;
+
+export interface BridgeLocation {
+  /** `window.location.search`, for the `?bridge=` override. */
+  search: string;
+  /** `window.location.host` — hostname plus port. */
+  host: string;
+  /** `window.location.hostname` — no port. */
+  hostname: string;
+  /** `window.location.protocol`. */
+  protocol: string;
+  /** True in a Vite dev build. */
+  dev: boolean;
+}
+
+/**
+ * Work out where the bridge is.
+ *
+ * Three cases, in priority order:
+ *
+ * 1. **`?bridge=host:port` wins**, always. It is how a page served from anywhere
+ *    reaches a bridge somewhere else, and how the e2e tests point a dev page at a
+ *    real bridge.
+ * 2. **In a dev build, guess the bridge's default port on this hostname.** The page
+ *    is served by Vite, never by the bridge, so its own origin is the one place the
+ *    bridge certainly is not — and dialling it produces a *worse* failure than no
+ *    bridge at all: Vite accepts the WebSocket upgrade and then never answers the
+ *    `hello`, so hosting sat there for eight seconds and reported "bridge handshake
+ *    timed out". Guessing 8080 makes `npm run dev` work as soon as the bridge runs.
+ * 3. **Otherwise the page's own origin**, because a production PWA is served *by*
+ *    the bridge — same host, same port, `/ws`.
+ */
+export function resolveBridgeUrl(location: BridgeLocation): string {
+  const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  const override = new URLSearchParams(location.search).get('bridge');
+  if (override !== null && override !== '') return `${scheme}://${override}/ws`;
+  const host = location.dev ? `${location.hostname}:${String(DEV_BRIDGE_PORT)}` : location.host;
   return `${scheme}://${host}/ws`;
+}
+
+/** `resolveBridgeUrl` against the real page location. */
+export function bridgeUrl(): string {
+  return resolveBridgeUrl({
+    search: window.location.search,
+    host: window.location.host,
+    hostname: window.location.hostname,
+    protocol: window.location.protocol,
+    dev: import.meta.env.DEV,
+  });
 }
 
 /** Adapt the browser WebSocket to the injected socket contract. */

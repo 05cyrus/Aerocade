@@ -57,9 +57,17 @@ Requirements: **Node >= 20** and npm.
 
 ```bash
 npm install       # install all workspaces
-npm run dev       # client dev server (local sandbox play, hot reload)
+npm run dev       # client (hot reload) + LAN bridge together — sandbox AND hosting work
 npm run verify    # typecheck + lint + tests + build — must be green before every commit
 ```
+
+`npm run dev` starts **both** processes: the PWA on <http://localhost:5173> and the bridge on
+<http://localhost:8080>. Both are needed to host — the client dev server has no `/ws`. In a dev build
+the client looks for the bridge on port 8080 of the same hostname rather than its own origin
+(ADR-035), so "Host LAN Match" works straight from the dev server. Use `npm run dev:client` or
+`npm run dev:server` to run just one.
+
+If your bridge is elsewhere or on a different port, add `?bridge=host:port` to the URL.
 
 Workspace layout (npm workspaces monorepo):
 

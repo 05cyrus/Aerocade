@@ -67,12 +67,20 @@ interface Rig {
 
 function rig(): Rig {
   // A live match, so nothing is gated by warmup.
-  const host = createMatch(createBoxMap(), 4242, { ...DEFAULT_MATCH_RULES, warmup: false });
+  const host = createMatch(createBoxMap(), 4242, {
+    ...DEFAULT_MATCH_RULES,
+    warmup: false,
+    waitForPlayers: false,
+  });
   addPlayer(host); // slot 0 = the "host player"
   const slot = addPlayer(host); // slot 1 = our client
   expect(host.match.phase).toBe(MatchPhase.Live);
 
-  const client = createMatch(createBoxMap(), 4242, { ...DEFAULT_MATCH_RULES, warmup: false });
+  const client = createMatch(createBoxMap(), 4242, {
+    ...DEFAULT_MATCH_RULES,
+    warmup: false,
+    waitForPlayers: false,
+  });
   const sent: Uint8Array[] = [];
   const session = new ClientSession(client, fakeTransport(sent), HOST_PEER, 0);
   // Through the real handshake rather than a test hook, so the slot the session
@@ -126,7 +134,7 @@ describe('prediction removes the round trip', () => {
     // The whole reason the systems take a slot parameter instead of there being a
     // separate "predict one player" routine: two implementations of movement would
     // have to agree forever, and they would not.
-    const rules = { ...DEFAULT_MATCH_RULES, warmup: false };
+    const rules = { ...DEFAULT_MATCH_RULES, warmup: false, waitForPlayers: false };
     const host = createMatch(createBoxMap(), 4242, rules);
     addPlayer(host);
     const slot = addPlayer(host);
@@ -372,7 +380,11 @@ describe('predictPlayer in isolation', () => {
   it('respects the match phase gate', () => {
     // Prediction runs the same input gate, so a client cannot shoot during a
     // countdown just because it is predicting locally.
-    const world = createMatch(createBoxMap(), 7, DEFAULT_MATCH_RULES);
+    const world = createMatch(createBoxMap(), 7, {
+      ...DEFAULT_MATCH_RULES,
+      warmup: true,
+      waitForPlayers: false,
+    });
     const slot = addPlayer(world);
     expect(world.match.phase).toBe(MatchPhase.Warmup);
     const ammo = world.players.ammoMag[slot * WEAPON_SLOTS] ?? 0;
@@ -391,7 +403,7 @@ describe('a projected position must not be stuck in the floor', () => {
     // predicted tick then ejects it sideways by half a tile plus half a body: a
     // horizontal teleport on every single snapshot. Clients never ran physics
     // before prediction, which is why this only surfaced now.
-    const rules = { ...DEFAULT_MATCH_RULES, warmup: false };
+    const rules = { ...DEFAULT_MATCH_RULES, warmup: false, waitForPlayers: false };
     const host = createMatch(createBoxMap(), 4242, rules);
     addPlayer(host);
     const slot = addPlayer(host);

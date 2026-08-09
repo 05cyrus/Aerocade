@@ -22,7 +22,7 @@ import {
   type SimWorld,
   type WeaponId,
 } from '@aerocade/shared';
-import { appStore, type HudState, type Standing } from '../app/store.js';
+import { appStore, type HudState, type LobbyPlayer, type Standing } from '../app/store.js';
 import { KeyboardMouseInput } from './input/KeyboardMouseInput.js';
 import { touchInput } from './input/TouchInput.js';
 import { GamepadInput } from './input/GamepadInput.js';
@@ -409,6 +409,26 @@ export class GameSession implements SceneDriver {
       youWon: m.winner !== NO_WINNER && m.winner === mine,
       teams: rules.teams,
     });
+
+    // The lobby list is its own thing: it is about people, not entrants, so it does
+    // not group by team the way the scoreboard does.
+    if (m.phase === MatchPhase.Waiting) {
+      const rows: LobbyPlayer[] = [];
+      const p = this.world.players;
+      for (let slot = 0; slot < p.connected.length; slot++) {
+        if (p.connected[slot] !== 1) continue;
+        rows.push({
+          slot,
+          name: this.nameOf(slot),
+          isLocal: slot === this.localPlayer,
+          isHost: slot === (this.net?.hostPlayer ?? 0),
+          team: p.team[slot] ?? 0,
+        });
+      }
+      appStore.setLobby(rows, this.net?.kind === 'host');
+    } else if (appStore.getState().lobbyPlayers.length > 0) {
+      appStore.setLobby([], false);
+    }
 
     const open = appStore.getState().scoreboardOpen || m.phase === MatchPhase.Over;
     if (!open) return;

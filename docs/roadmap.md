@@ -70,7 +70,8 @@ ADR. See [architecture.md](architecture.md).
   covered by codec round-trip tests.
 - Playwright: full FFA match to frag limit between two contexts, winner shown identically.
 
-**Status (ADR-031).** FFA is done and verified: warmup countdown with weapons locked, the match
+**Status (ADR-031, ADR-036).** FFA is done and verified. Players wait in a **pre-game lobby** that
+only the host can start — there is no countdown (ADR-036). Then: the match
 clock, the frag limit, the held-Tab scoreboard, the end screen, and back to the menu. Match state
 lives in the sim, is snapshot-serialised, is covered by the state hash, and rides every snapshot,
 so a joining client shows the same clock and score as the host. The two-context frag-limit run

@@ -22,6 +22,8 @@ function fakeHandle(): NetHandle & { closes: number; lose: (reason: string) => v
     playerCount: () => 2,
     nameOf: () => null,
     renderOffset: () => ({ x: 0, y: 0 }),
+    hostPlayer: 0,
+    startMatch: () => undefined,
     onLost: latch.onLost,
     closes: 0,
     lose: latch.lose,

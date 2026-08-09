@@ -14,6 +14,12 @@ import { GameMode, MAX_TEAMS, NO_WINNER } from './modes.js';
  * handshake.
  */
 
+/**
+ * Phase values are **wire values** (a `u8` in every snapshot), so this list is
+ * append-only — renumbering would make an older client misread a newer host's
+ * phase, and `tuningHash` does not cover it. That is why `Waiting` is 3 rather
+ * than 0 despite coming first in the match's life.
+ */
 export const MatchPhase = {
   /** Pre-match countdown: players can move, weapons are locked. */
   Warmup: 0,
@@ -21,6 +27,11 @@ export const MatchPhase = {
   Live: 1,
   /** Decided. Inputs are frozen and the scoreboard is final. */
   Over: 2,
+  /**
+   * Waiting in the lobby for enough players, all readied up. Movement is allowed
+   * so people can look around; weapons are not.
+   */
+  Waiting: 3,
 } as const;
 export type MatchPhase = (typeof MatchPhase)[keyof typeof MatchPhase];
 
@@ -42,6 +53,8 @@ export class MatchState {
   fragLimit = 0;
   /** Winning entrant (player slot in FFA, team in TDM), or `NO_WINNER`. */
   winner: number = NO_WINNER;
+  /** Whether leaving the lobby runs a countdown, or goes straight live. */
+  warmupAfterWait = true;
   /**
    * Team frags, accumulated rather than summed from `players.kills` so a
    * disconnect cannot retroactively lower a team's score.
@@ -60,6 +73,7 @@ export class MatchState {
     this.timeLimitTicks = src.timeLimitTicks;
     this.fragLimit = src.fragLimit;
     this.winner = src.winner;
+    this.warmupAfterWait = src.warmupAfterWait;
     this.teamFrags.set(src.teamFrags);
   }
 }
@@ -73,6 +87,12 @@ export interface MatchRules {
   fragLimit?: number;
   /** Run the pre-match countdown. False starts live immediately. */
   warmup?: boolean;
+  /**
+   * Hold the match in the lobby until the host starts it. Defaults
+   * to **false**, so `createMatch` and every sim test still get a world that can
+   * be played immediately; a real LAN match opts in via `DEFAULT_MATCH_RULES`.
+   */
+  waitForPlayers?: boolean;
 }
 
 /**
@@ -88,15 +108,29 @@ export const SANDBOX_RULES: MatchRules = {
   durationSeconds: 0,
   fragLimit: 0,
   warmup: false,
+  waitForPlayers: false,
 };
 
-/** A real match: TUNING's mode, clock and frag limit, with the countdown. */
-export const DEFAULT_MATCH_RULES: MatchRules = { warmup: true };
+/**
+ * A real match: TUNING's mode, clock and frag limit, held in the lobby until the
+ * host presses Start — and then straight into play.
+ *
+ * No countdown. A timer that starts the match for you is exactly what the lobby
+ * replaces: players join, the host sees who is there, and the host decides. The
+ * `warmup` phase is still supported for a mode that wants one, just not default.
+ */
+export const DEFAULT_MATCH_RULES: MatchRules = { warmup: false, waitForPlayers: true };
 
 /** Apply rules to a fresh match. */
 export function configureMatch(state: MatchState, tick: number, rules: MatchRules = {}): void {
   state.mode = rules.mode ?? GameMode.Ffa;
-  state.phase = (rules.warmup ?? true) ? MatchPhase.Warmup : MatchPhase.Live;
+  state.phase =
+    (rules.waitForPlayers ?? false)
+      ? MatchPhase.Waiting
+      : (rules.warmup ?? true)
+        ? MatchPhase.Warmup
+        : MatchPhase.Live;
+  state.warmupAfterWait = rules.warmup ?? true;
   state.phaseStartTick = tick;
   state.timeLimitTicks = Math.max(
     0,
@@ -105,6 +139,11 @@ export function configureMatch(state: MatchState, tick: number, rules: MatchRule
   state.fragLimit = Math.max(0, Math.trunc(rules.fragLimit ?? TUNING.match.fragLimit));
   state.winner = NO_WINNER;
   state.teamFrags.fill(0);
+}
+
+/** True while the match has not started and is waiting on players. */
+export function isWaiting(state: MatchState): boolean {
+  return state.phase === MatchPhase.Waiting;
 }
 
 /** Ticks the current phase has been running. */
@@ -118,14 +157,22 @@ export function phaseElapsedTicks(state: MatchState, tick: number): number {
  */
 export function timeRemainingSeconds(state: MatchState, tick: number): number {
   if (state.timeLimitTicks === 0) return Infinity;
-  if (state.phase === MatchPhase.Warmup) return state.timeLimitTicks / SIM_HZ;
-  const left = state.timeLimitTicks - phaseElapsedTicks(state, tick);
-  return Math.max(0, left) / SIM_HZ;
+  // Before the live phase the full duration is still ahead: a HUD showing 7:58
+  // during the lobby looks like the match already started without you.
+  if (state.phase === MatchPhase.Warmup || state.phase === MatchPhase.Waiting) {
+    return state.timeLimitTicks / SIM_HZ;
+  }
+  // Clamped at both ends. `enterPhase` sets `phaseStartTick` to the *next* tick, so
+  // for one tick after a transition `elapsed` is -1 — and an unclamped subtraction
+  // then reports 480.017 s on an eight-minute match, which a HUD renders as 8:01.
+  const elapsed = Math.max(0, phaseElapsedTicks(state, tick));
+  return Math.max(0, state.timeLimitTicks - elapsed) / SIM_HZ;
 }
 
 /** Seconds left in the warmup countdown; 0 once the match is live. */
 export function warmupRemainingSeconds(state: MatchState, tick: number): number {
   if (state.phase !== MatchPhase.Warmup) return 0;
-  const left = Math.round(TUNING.match.warmupSeconds * SIM_HZ) - phaseElapsedTicks(state, tick);
-  return Math.max(0, left) / SIM_HZ;
+  // Same clamp as the live clock: a countdown must never read above its own length.
+  const elapsed = Math.max(0, phaseElapsedTicks(state, tick));
+  return Math.max(0, Math.round(TUNING.match.warmupSeconds * SIM_HZ) - elapsed) / SIM_HZ;
 }

@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { MatchPhase } from '@aerocade/shared';
 import { appStore, useAppState } from '../store.js';
+import { PreGameLobby } from './PreGameLobby.js';
 import { Scoreboard } from './Scoreboard.js';
 
 /**
@@ -38,7 +39,7 @@ export function Hud(): ReactElement {
 
   return (
     <div className="hud">
-      {match !== null && (
+      {match !== null && match.phase !== MatchPhase.Waiting && (
         <div className="match-bar">
           <span className="match-clock">
             {match.timeLeft === null ? '∞' : formatClock(match.timeLeft)}
@@ -50,6 +51,8 @@ export function Hud(): ReactElement {
           )}
         </div>
       )}
+
+      <PreGameLobby />
 
       {match !== null && match.phase === MatchPhase.Warmup && (
         <div className="match-warmup" role="status">

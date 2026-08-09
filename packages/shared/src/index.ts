@@ -31,7 +31,7 @@ export { weaponsSystem } from './sim/systems/weapons.js';
 export { projectilesSystem } from './sim/systems/projectiles.js';
 export { damageSystem } from './sim/systems/damage.js';
 export { inputGateSystem } from './sim/systems/input-gate.js';
-export { matchSystem, leader, restartMatch } from './sim/systems/match.js';
+export { matchSystem, leader, lobbyCounts, restartMatch, startMatch } from './sim/systems/match.js';
 export {
   pickupsSystem,
   initPickups,

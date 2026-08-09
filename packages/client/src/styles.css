@@ -316,6 +316,160 @@ body,
   text-shadow: 0 0 12px rgba(60, 214, 255, 0.6);
 }
 
+/* Pre-game lobby. z-index 9: over the HUD (6) and scoreboard (8), under the
+   connection-lost notice (10) — a dead match still outranks the lobby. */
+.pregame {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-content: center;
+  background: rgba(10, 16, 13, 0.72);
+  pointer-events: auto;
+}
+
+.pregame-panel {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  min-width: min(400px, 90vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 18px 22px;
+  border: 1px solid rgba(124, 138, 176, 0.35);
+  border-radius: 10px;
+  background: var(--ac-panel);
+}
+
+.pregame-title {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 0.16em;
+  color: var(--ac-accent2);
+}
+
+.pregame-sub {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ac-dim);
+}
+
+.lobby-list {
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.lobby-row {
+  display: grid;
+  grid-template-columns: 22px 26px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(124, 138, 176, 0.08);
+}
+
+.lobby-row.is-you {
+  background: rgba(124, 138, 176, 0.2);
+}
+
+.lobby-rank {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ac-dim);
+  text-align: right;
+}
+
+.lobby-avatar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: #12160f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lobby-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--ac-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-tag {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.lobby-tag-you {
+  background: rgba(124, 138, 176, 0.3);
+  color: var(--ac-text);
+}
+
+.lobby-tag-host {
+  background: var(--ac-accent2);
+  color: #12160f;
+}
+
+.lobby-team {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ac-dim);
+}
+
+.pregame-count {
+  font-size: 12px;
+  color: var(--ac-dim);
+}
+
+.pregame-start {
+  width: 100%;
+  margin-top: 2px;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ac-accent2);
+  color: #12160f;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.pregame-start:hover {
+  filter: brightness(1.1);
+}
+
+.pregame-waiting {
+  padding: 10px 0 2px;
+  font-size: 14px;
+  color: var(--ac-text);
+}
+
+.pregame-hint {
+  font-size: 11px;
+  color: var(--ac-dim);
+  text-align: center;
+  max-width: 34ch;
+}
+
 /* Match bar: centred at the top, above the back button's row. */
 .match-bar {
   position: absolute;

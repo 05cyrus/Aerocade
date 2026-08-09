@@ -160,6 +160,13 @@ export interface NetHandle {
    * correction. Zero on a host, and zero on a client whose prediction was right.
    */
   renderOffset(): { x: number; y: number };
+  /** The host's player slot, so the lobby can badge them. */
+  readonly hostPlayer: number;
+  /**
+   * Leave the pre-game lobby and play. Only a host can — a client's call is
+   * ignored, because only the host's world is authoritative.
+   */
+  startMatch(): void;
   /**
    * Register the listener told when the match ends on its own — the socket
    * dropped, or the host left. Without this a dead connection presents as a
@@ -254,6 +261,10 @@ export async function hostMatch(mapId: MapId, playerName: string): Promise<NetHa
     nameOf: (slot) => host.nameOf(slot),
     // A host predicts nothing: its own simulation is the answer.
     renderOffset: () => ({ x: 0, y: 0 }),
+    hostPlayer: localPlayer,
+    startMatch: () => {
+      host.startMatch();
+    },
     onLost: loss.onLost,
     close: () => {
       bridge.leaveRoom();
@@ -374,6 +385,14 @@ export async function joinMatch(
       },
       nameOf: (slot) => client.nameOf(slot),
       renderOffset: () => client.renderOffset,
+      // The host adds itself to a fresh world before the room even exists, so it
+      // always holds slot 0 (asserted in packages/shared/test/match.test.ts).
+      // Cheaper than putting it in WELCOME, and structurally guaranteed.
+      hostPlayer: 0,
+      startMatch: () => {
+        // Deliberately nothing: starting is the host's call, and a client that
+        // moved its own phase would simply be corrected by the next snapshot.
+      },
       onLost: loss.onLost,
       close: () => {
         bridge.leaveRoom();

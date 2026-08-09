@@ -177,6 +177,11 @@ export const TUNING = {
      * shoot, so everyone has landed somewhere sensible before frags count.
      */
     warmupSeconds: 5,
+    /**
+     * Players needed before a match can leave the lobby. Two, because a
+     * deathmatch against nobody is not a match — a host alone waits.
+     */
+    minPlayers: 2,
   },
 } as const;
 

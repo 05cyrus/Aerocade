@@ -63,6 +63,18 @@ export interface MatchHud {
   teams: boolean;
 }
 
+/**
+ * One row of the pre-game lobby — a person, always, even in a team mode where the
+ * scoreboard groups by team. The lobby is about who is in the room.
+ */
+export interface LobbyPlayer {
+  slot: number;
+  name: string;
+  isLocal: boolean;
+  isHost: boolean;
+  team: number;
+}
+
 /** One row of the scoreboard: a player in FFA, a team in TDM. */
 export interface Standing {
   entrant: number;
@@ -118,6 +130,10 @@ export interface AppState {
   match: MatchHud | null;
   /** Scoreboard rows, already sorted. Published only when something shows them. */
   standings: readonly Standing[];
+  /** Everyone in the pre-game lobby, in join order. Empty once the match starts. */
+  lobbyPlayers: readonly LobbyPlayer[];
+  /** True when the local player is the host and may start the match. */
+  canStartMatch: boolean;
   /** The player is holding the scoreboard key. Presentation only, never simulated. */
   scoreboardOpen: boolean;
   /**
@@ -162,6 +178,8 @@ let state: AppState = {
   net: null,
   match: null,
   standings: [],
+  lobbyPlayers: [],
+  canStartMatch: false,
   scoreboardOpen: false,
   netError: null,
 };
@@ -208,6 +226,8 @@ export const appStore = {
       scopeZoom: 1,
       match: null,
       standings: [],
+      lobbyPlayers: [],
+      canStartMatch: false,
       scoreboardOpen: false,
     };
     interactRequested = false;
@@ -365,6 +385,28 @@ export const appStore = {
   /** Publish scoreboard rows (already sorted by the session). */
   setStandings(standings: readonly Standing[]): void {
     state = { ...state, standings };
+    notify();
+  },
+  /**
+   * Publish the lobby roster. No-ops when nothing changed, because this runs on
+   * the HUD's cadence and a new array every time would re-render the list ten
+   * times a second while people are just standing around.
+   */
+  setLobby(lobbyPlayers: readonly LobbyPlayer[], canStartMatch: boolean): void {
+    const same =
+      state.canStartMatch === canStartMatch &&
+      state.lobbyPlayers.length === lobbyPlayers.length &&
+      state.lobbyPlayers.every((row, i) => {
+        const next = lobbyPlayers[i];
+        return (
+          next?.slot === row.slot &&
+          next.name === row.name &&
+          next.team === row.team &&
+          next.isHost === row.isHost
+        );
+      });
+    if (same) return;
+    state = { ...state, lobbyPlayers, canStartMatch };
     notify();
   },
   /** Show/hide the scoreboard. Held, not toggled — like every other shooter. */

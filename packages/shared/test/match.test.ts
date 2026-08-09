@@ -4,6 +4,7 @@ import { addPlayer } from '../src/sim/spawns.js';
 import { assignTeam, createMatch } from '../src/sim/match.js';
 import {
   configureMatch,
+  type MatchRules,
   DEFAULT_MATCH_RULES,
   MatchPhase,
   SANDBOX_RULES,
@@ -11,7 +12,7 @@ import {
   warmupRemainingSeconds,
 } from '../src/sim/match/state.js';
 import { FFA_RULES, GameMode, NO_WINNER, rulesetFor, TDM_RULES } from '../src/sim/match/modes.js';
-import { leader, restartMatch } from '../src/sim/systems/match.js';
+import { leader, lobbyCounts, restartMatch, startMatch } from '../src/sim/systems/match.js';
 import { stepWorld } from '../src/sim/step.js';
 import { Buttons } from '../src/sim/input.js';
 import { SimEventType } from '../src/sim/events.js';
@@ -40,8 +41,17 @@ import { applySnapshotToWorld } from '../src/net/apply-snapshot.js';
  * survives a snapshot round trip.
  */
 
-/** A world with `count` players and a real (ruled) match. */
-function ruledMatch(count: number, rules = DEFAULT_MATCH_RULES): SimWorld {
+/**
+ * A world with `count` players and a real (ruled) match, skipping the lobby.
+ *
+ * `waitForPlayers: false, warmup: true` on purpose: these tests are about the
+ * countdown, the clock and the win conditions. A default match now skips the
+ * countdown and waits for the host instead — that is the lobby's own block below.
+ */
+function ruledMatch(
+  count: number,
+  rules: MatchRules = { ...DEFAULT_MATCH_RULES, waitForPlayers: false, warmup: true },
+): SimWorld {
   const world = createMatch(createBoxMap(), 1234, rules);
   for (let i = 0; i < count; i++) {
     const slot = addPlayer(world);
@@ -360,15 +370,15 @@ describe('rematch', () => {
     if (firstPadArray === undefined) throw new Error('no pad pool');
     const padsBefore = [...firstPadArray];
     restartMatch(world);
-    expect(world.match.phase).toBe(MatchPhase.Warmup);
+    expect(world.match.phase, 'a rematch waits for the host').toBe(MatchPhase.Waiting);
     expect(world.match.winner).toBe(NO_WINNER);
     expect([...world.players.kills]).toEqual(new Array(world.players.kills.length).fill(0));
     expect([...world.players.deaths]).toEqual(new Array(world.players.deaths.length).fill(0));
     // Pads keep their stock: a rematch is not a fresh world, which is what lets a
     // networked match restart without re-running the join handshake.
     expect([...firstPadArray]).toEqual(padsBefore);
-    // And it is playable again.
-    run(world, Math.round(TUNING.match.warmupSeconds * SIM_HZ) + 1);
+    // And it is playable again once the host says so.
+    startMatch(world);
     expect(world.match.phase).toBe(MatchPhase.Live);
   });
 });
@@ -451,6 +461,154 @@ describe('match state over the wire', () => {
     expect(timeRemainingSeconds(client.match, client.tick)).toBeCloseTo(
       timeRemainingSeconds(host.match, host.tick),
       6,
+    );
+  });
+});
+
+describe('the lobby: the host starts the match', () => {
+  /** A ruled match held in the lobby, with `count` players. */
+  const lobby = (count: number, rules: MatchRules = DEFAULT_MATCH_RULES): SimWorld => {
+    const world = createMatch(createBoxMap(), 99, rules);
+    for (let i = 0; i < count; i++) assignTeam(world, addPlayer(world));
+    return world;
+  };
+
+  it('starts a real LAN match in the lobby, not in play', () => {
+    // The host used to open a room, count down alone, and be mid-match before
+    // anyone could join.
+    expect(lobby(1).match.phase).toBe(MatchPhase.Waiting);
+  });
+
+  it('never starts on its own, however long it waits', () => {
+    // The whole point: no timer starts the match.
+    const world = lobby(4);
+    run(world, SIM_HZ * 30); // thirty seconds
+    expect(world.match.phase).toBe(MatchPhase.Waiting);
+    expect(world.match.winner).toBe(NO_WINNER);
+  });
+
+  it('goes straight into play when the host starts it — no countdown', () => {
+    const world = lobby(3);
+    startMatch(world);
+    expect(world.match.phase).toBe(MatchPhase.Live);
+    // And the live clock begins now, not when the world was made — it reads the
+    // full duration on the first live tick, then counts down.
+    expect(timeRemainingSeconds(world.match, world.tick)).toBeCloseTo(
+      TUNING.match.durationSeconds,
+      6,
+    );
+    run(world, SIM_HZ * 2);
+    expect(timeRemainingSeconds(world.match, world.tick)).toBeCloseTo(
+      TUNING.match.durationSeconds - 2,
+      6,
+    );
+  });
+
+  it('still supports a countdown for a mode that wants one', () => {
+    const world = lobby(2, { ...DEFAULT_MATCH_RULES, warmup: true });
+    startMatch(world);
+    expect(world.match.phase).toBe(MatchPhase.Warmup);
+    run(world, Math.round(TUNING.match.warmupSeconds * SIM_HZ) + 1);
+    expect(world.match.phase).toBe(MatchPhase.Live);
+  });
+
+  it('lets the host start alone, because it is the host’s call', () => {
+    // A minimum-player rule would leave someone testing their own map stuck.
+    const world = lobby(1);
+    startMatch(world);
+    expect(world.match.phase).toBe(MatchPhase.Live);
+  });
+
+  it('announces the start as a phase event, so every client reacts', () => {
+    const world = lobby(2);
+    const announced: number[] = [];
+    startMatch(world);
+    world.events.forEach((ev) => {
+      if (ev.type === SimEventType.MatchPhase) announced.push(ev.a);
+    });
+    expect(announced).toEqual([MatchPhase.Live]);
+  });
+
+  it('ignores a second start', () => {
+    const world = lobby(2);
+    startMatch(world);
+    const startedAt = world.match.phaseStartTick;
+    run(world, 30);
+    startMatch(world);
+    expect(world.match.phaseStartTick, 'the clock was not restarted').toBe(startedAt);
+  });
+
+  it('counts who is present for the lobby screen', () => {
+    const world = lobby(3);
+    expect(lobbyCounts(world)).toEqual({ connected: 3, needed: TUNING.match.minPlayers });
+    world.players.connected[1] = 0;
+    expect(lobbyCounts(world).connected).toBe(2);
+  });
+
+  it('locks weapons in the lobby but allows movement', () => {
+    const world = lobby(2);
+    const startX = world.players.posX[0] ?? 0;
+    const startAmmo = world.players.ammoMag[0] ?? 0;
+    stage(world, 0, { moveX: 1, buttons: Buttons.Fire });
+    run(world, 40);
+    expect(world.players.posX[0], 'walked while waiting').not.toBeCloseTo(startX, 2);
+    expect(world.players.ammoMag[0], 'no ammo spent').toBe(startAmmo);
+  });
+
+  it('shows the full match duration while waiting', () => {
+    const world = lobby(2, { ...DEFAULT_MATCH_RULES, durationSeconds: 300 });
+    run(world, 120);
+    expect(timeRemainingSeconds(world.match, world.tick)).toBeCloseTo(300, 6);
+  });
+
+  it('sends a rematch back to the lobby, waiting on the host again', () => {
+    const world = lobby(2, { ...DEFAULT_MATCH_RULES, fragLimit: 1 });
+    startMatch(world);
+    world.players.kills[0] = 1;
+    run(world, 1);
+    expect(world.match.phase).toBe(MatchPhase.Over);
+
+    restartMatch(world);
+    expect(world.match.phase).toBe(MatchPhase.Waiting);
+    run(world, SIM_HZ * 5);
+    expect(world.match.phase, 'still the host’s call').toBe(MatchPhase.Waiting);
+    startMatch(world);
+    expect(world.match.phase).toBe(MatchPhase.Live);
+  });
+
+  it('leaves the sandbox alone', () => {
+    // Nothing to wait for in single-player practice.
+    const world = createMatch(createBoxMap(), 1);
+    addPlayer(world);
+    expect(world.match.phase).toBe(MatchPhase.Live);
+    run(world, 120);
+    expect(world.match.phase).toBe(MatchPhase.Live);
+  });
+});
+
+describe('a clock never reads above its own limit', () => {
+  it('shows exactly the duration on the first live tick, not more', () => {
+    // Regression: `enterPhase` starts the next tick, so for one tick `elapsed` is
+    // -1 and an unclamped subtraction reported 480.017 s — rendered as 8:01.
+    const world = createMatch(createBoxMap(), 5, DEFAULT_MATCH_RULES);
+    addPlayer(world);
+    startMatch(world);
+    expect(timeRemainingSeconds(world.match, world.tick)).toBeCloseTo(
+      TUNING.match.durationSeconds,
+      9,
+    );
+  });
+
+  it('shows exactly the countdown length on its first tick', () => {
+    const world = createMatch(createBoxMap(), 5, {
+      ...DEFAULT_MATCH_RULES,
+      warmup: true,
+    });
+    addPlayer(world);
+    startMatch(world);
+    expect(warmupRemainingSeconds(world.match, world.tick)).toBeCloseTo(
+      TUNING.match.warmupSeconds,
+      9,
     );
   });
 });

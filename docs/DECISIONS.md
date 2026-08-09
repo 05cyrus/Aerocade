@@ -1172,6 +1172,53 @@ precedence in both modes, an empty `?bridge=`, `wss` on an https page, and one a
 still matches the server's default. Verified end to end both ways: from the dev server two browsers now
 host and join (both see two players), and the bridge-served production build still uses its own origin.
 
+## ADR-036: A pre-game lobby the host starts, and no countdown at all
+
+ADR-031 shipped a warmup countdown, and hosting exposed the flaw immediately: a host opened a room,
+the timer ran, and the match was live before anyone could join. A countdown asks the host to guess how
+long their friends need and starts without them when it guesses wrong.
+
+**The lobby is a simulation phase, not a screen.** `MatchPhase.Waiting` holds a real match until the
+host starts it. Making it a phase rather than a React route means it is snapshot-serialised like
+everything else, so a joining client learns it is in a lobby from its first frame, players can walk
+around while they wait, and "the match started" is one authoritative fact rather than each client's
+own opinion. Phase values are wire bytes, so the list is append-only — `Waiting` is 3 despite coming
+first in a match's life, and that is deliberate.
+
+**Nothing but the host can start it.** `matchSystem` returns immediately in `Waiting`: no timer, no
+quorum, no readiness threshold. `startMatch` is the only exit, it lives on `HostSession`, and a client
+has no path to it — a client that moved its own phase would be overwritten by the next snapshot anyway.
+The client's `NetHandle.startMatch` is deliberately a no-op with a comment saying why.
+
+**The countdown is off by default but not deleted.** `DEFAULT_MATCH_RULES` is now
+`{ waitForPlayers: true, warmup: false }` — lobby, then straight into play. The `Warmup` phase and its
+tests remain for a mode that wants one; removing a tested, working phase to satisfy "no countdown"
+would be throwing away the option rather than changing the default.
+
+**No minimum player count.** An earlier pass required two players and everyone readied up. Both went:
+readiness is redundant once one person decides, and a minimum leaves someone testing their own map
+stuck staring at a button that will not work. The host can start alone.
+
+**The lobby lists people, not entrants.** The scoreboard groups by team in TDM; the lobby never does,
+because "who is in this room" is always a list of humans. It reuses the roster (ADR-032) for names, so
+players show the name they chose the moment they appear.
+
+**The host is slot 0 by construction**, and the lobby badges them on that basis rather than adding a
+byte to WELCOME. The host adds itself to a brand-new world before the room exists, so no other slot is
+possible — pinned by a test rather than left as a comment.
+
+**Two bugs this turned up, both in code from ADR-031.** `enterPhase` set the new phase's clock to
+`world.tick + 1`, which is right for a transition decided _inside_ the pipeline (the current tick was
+already simulated under the outgoing phase) and wrong for one triggered from outside it (a button press
+between ticks), costing a tick every time; the two callers are now distinct and documented. And
+`timeRemainingSeconds` subtracted an unclamped elapsed, so for one tick after any transition it reported
+**480.017 s** on an eight-minute match — which a HUD renders as 8:01. Both have regression tests.
+
+**Verified with three players over the LAN**: the host lands in the lobby rather than a countdown, nine
+seconds of waiting starts nothing, each friend appears on every screen the moment they join with the
+right `you`/`host` tags, only the host has a Start button while the others read "Waiting for the host to
+start…", and one tap closes all three lobbies and puts 8:00 on all three clocks.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

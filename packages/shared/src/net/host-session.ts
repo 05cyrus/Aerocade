@@ -17,6 +17,7 @@ import { PROTOCOL_VERSION } from '../protocol/messages.js';
 import { SimEventType } from '../sim/events.js';
 import { addPlayer, removePlayer } from '../sim/spawns.js';
 import { assignTeam } from '../sim/match.js';
+import { startMatch } from '../sim/systems/match.js';
 import { stepWorld } from '../sim/step.js';
 import { setInput, type SimWorld } from '../sim/world.js';
 import { Channel, type Transport } from './transport.js';
@@ -179,6 +180,20 @@ export class HostSession {
     entries.sort((a, b) => a.slot - b.slot);
     const bytes = encodeRoster(entries);
     for (const peerId of this.clients.keys()) this.transport.send(peerId, Channel.Ctrl, bytes);
+  }
+
+  /**
+   * Leave the pre-game lobby and play. Host only by construction: a client has no
+   * path to this object, and its own copy of the world is a projection that the
+   * next snapshot would overwrite anyway.
+   */
+  startMatch(): void {
+    startMatch(this.world);
+  }
+
+  /** The host's own player slot. */
+  get hostPlayer(): number {
+    return this.hostPlayerId;
   }
 
   /** Slot → name, for the host's own scoreboard. */

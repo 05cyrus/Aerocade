@@ -13,9 +13,10 @@ import type { SimWorld } from '../world.js';
  * simply not know to, and "you could still throw grenades during the end screen"
  * is the kind of bug nobody writes a test for.
  *
- * Warmup lets players move but not shoot — standing still for a countdown feels
- * broken, and getting a free frag off the starting line is worse. Once the match
- * is over everything is frozen so the arena settles under the scoreboard.
+ * The lobby and the countdown both let players move but not shoot — standing
+ * still while you wait feels broken, and getting a free frag off the starting line
+ * is worse. Once the match is over everything is frozen so the arena settles under
+ * the scoreboard.
  */
 
 /** Everything that commits violence. Cleared during warmup. */
@@ -30,7 +31,9 @@ export function inputGateSystem(world: SimWorld, only: number = ALL_PLAYERS): vo
     if (world.players.connected[i] !== 1) continue;
     const input = world.inputs[i];
     if (input === undefined) continue;
-    if (phase === MatchPhase.Warmup) {
+    if (phase === MatchPhase.Warmup || phase === MatchPhase.Waiting) {
+      // Move and look around, but do not shoot. The Ready button is deliberately
+      // untouched — it is how you leave this phase.
       input.buttons &= ~WEAPON_BUTTONS;
       continue;
     }

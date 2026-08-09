@@ -1,4 +1,4 @@
-import { SIM_HZ } from '../../constants.js';
+import { MAX_PLAYERS, SIM_HZ } from '../../constants.js';
 import { SimEventType } from '../events.js';
 import { NO_WINNER, rulesetFor } from '../match/modes.js';
 import { MatchPhase, phaseElapsedTicks } from '../match/state.js';
@@ -28,9 +28,13 @@ export function matchSystem(world: SimWorld): void {
   // and the difference between a 5.000 s and a 5.017 s countdown in a test.
   const covered = phaseElapsedTicks(match, world.tick) + 1;
 
+  // The lobby ends when the host presses Start — never on a timer, and never
+  // because some quorum was reached. `startMatch` is the only way out.
+  if (match.phase === MatchPhase.Waiting) return;
+
   if (match.phase === MatchPhase.Warmup) {
     if (covered >= Math.round(TUNING.match.warmupSeconds * SIM_HZ)) {
-      enterPhase(world, MatchPhase.Live);
+      enterPhaseInPipeline(world, MatchPhase.Live);
     }
     return;
   }
@@ -51,7 +55,7 @@ export function matchSystem(world: SimWorld): void {
       if (!rules.isActive(world, entrant)) continue;
       if (rules.fragsOf(world, entrant) >= match.fragLimit) {
         match.winner = entrant;
-        enterPhase(world, MatchPhase.Over);
+        enterPhaseInPipeline(world, MatchPhase.Over);
         return;
       }
     }
@@ -59,8 +63,29 @@ export function matchSystem(world: SimWorld): void {
 
   if (match.timeLimitTicks > 0 && covered >= match.timeLimitTicks) {
     match.winner = leader(world);
-    enterPhase(world, MatchPhase.Over);
+    enterPhaseInPipeline(world, MatchPhase.Over);
   }
+}
+
+/**
+ * Leave the lobby and play. **Host only** — a client calling this would move its
+ * own projection and be corrected by the next snapshot, which is why nothing on
+ * the client path can reach it.
+ *
+ * Goes straight to `Live` unless the match was configured with a countdown; there
+ * is no timer in the lobby, so this is the only thing that starts a match.
+ */
+export function startMatch(world: SimWorld): void {
+  if (world.match.phase !== MatchPhase.Waiting) return;
+  enterPhase(world, world.match.warmupAfterWait ? MatchPhase.Warmup : MatchPhase.Live, world.tick);
+}
+
+/** Players present, and the minimum a match wants — for the lobby screen. */
+export function lobbyCounts(world: SimWorld): { connected: number; needed: number } {
+  const p = world.players;
+  let connected = 0;
+  for (let i = 0; i < MAX_PLAYERS; i++) if (p.connected[i] === 1) connected += 1;
+  return { connected, needed: TUNING.match.minPlayers };
 }
 
 /**
@@ -92,14 +117,30 @@ export function leader(world: SimWorld): number {
  * Move to a phase and restart its clock, emitting one event so the renderer,
  * audio and UI all learn about it the same way they learn about a kill — rather
  * than by polling the phase every frame and comparing it to what they saw last.
+ *
+ * `startTick` is which tick the new phase's clock counts from, and the two callers
+ * genuinely differ. `stepWorld` simulates tick `world.tick` and *then* increments,
+ * so:
+ *
+ * - **From inside the pipeline** (`matchSystem`), tick `world.tick` has already
+ *   been simulated under the outgoing phase, so the new phase starts at
+ *   `world.tick + 1`.
+ * - **From outside it** (`startMatch`, `restartMatch` — a button press between
+ *   ticks), nothing has run under the outgoing phase since the change, so the new
+ *   phase starts at `world.tick` itself.
+ *
+ * Getting this wrong costs one tick per transition, which is invisible until a
+ * test measures the clock and finds 478.017 s where it wanted 478.
  */
-function enterPhase(world: SimWorld, phase: MatchPhase): void {
+function enterPhase(world: SimWorld, phase: MatchPhase, startTick: number): void {
   world.match.phase = phase;
-  // The next tick, not this one: the tick in progress has already been simulated
-  // under the outgoing phase, so the new phase's clock starts cleanly at 0 for
-  // every reader that looks after the step (the HUD, the codec, a snapshot).
-  world.match.phaseStartTick = world.tick + 1;
+  world.match.phaseStartTick = startTick;
   world.events.emit(SimEventType.MatchPhase, phase, world.match.winner, 0, 0);
+}
+
+/** A transition decided while simulating the current tick. */
+function enterPhaseInPipeline(world: SimWorld, phase: MatchPhase): void {
+  enterPhase(world, phase, world.tick + 1);
 }
 
 /**
@@ -115,5 +156,5 @@ export function restartMatch(world: SimWorld): void {
   p.deaths.fill(0);
   world.match.teamFrags.fill(0);
   world.match.winner = NO_WINNER;
-  enterPhase(world, MatchPhase.Warmup);
+  enterPhase(world, MatchPhase.Waiting, world.tick);
 }

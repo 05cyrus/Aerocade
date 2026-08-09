@@ -316,6 +316,15 @@ body,
   text-shadow: 0 0 12px rgba(60, 214, 255, 0.6);
 }
 
+.lobby-target {
+  font-size: 11px;
+  color: var(--ac-dim);
+}
+
+.lobby-target code {
+  color: var(--ac-text);
+}
+
 /* Pre-game lobby. z-index 9: over the HUD (6) and scoreboard (8), under the
    connection-lost notice (10) — a dead match still outranks the lobby. */
 .pregame {

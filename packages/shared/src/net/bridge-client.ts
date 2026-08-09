@@ -106,11 +106,19 @@ export class BridgeClient {
         onClose: () => {
           clearTimeout(timer);
           this.onSocketClosed();
-          reject(new Error('bridge closed during handshake'));
+          reject(new Error(`the bridge at ${this.url} closed the connection`));
         },
         onError: (error) => {
           clearTimeout(timer);
-          reject(error instanceof Error ? error : new Error('bridge socket error'));
+          // A browser WebSocket error event carries no useful detail by design, so
+          // the address is the only diagnostic there is — and it is the one that
+          // matters: "cannot reach ws://192.168.1.9:8080/ws" tells a player their
+          // friend's address is wrong, where "socket error" tells them nothing.
+          reject(
+            error instanceof Error && error.message !== ''
+              ? new Error(`${error.message} (${this.url})`)
+              : new Error(`cannot reach the bridge at ${this.url}`),
+          );
         },
       });
     });

@@ -8,10 +8,13 @@ const HANDSHAKE_TIMEOUT_MS = 10_000;
 /**
  * Liveness heartbeat. A half-open socket (peer walked out of Wi-Fi range)
  * never emits 'close' on its own; without pings a dead host would pin its
- * room forever. Two missed pongs = terminated, which fires 'close' and runs
+ * room forever — and a stale room in the list is worse than no room, because a
+ * player picks it and waits for a host that will never answer. Ten seconds means a
+ * ghost is gone within twenty, which is about as long as someone will stare at a
+ * room list. Two missed pongs = terminated, which fires 'close' and runs
  * the normal room-cleanup path.
  */
-const HEARTBEAT_INTERVAL_MS = 30_000;
+const HEARTBEAT_INTERVAL_MS = 10_000;
 /** Upper bound on one WS frame; larger is hostile, not gameplay (docs/security.md). */
 const MAX_WS_PAYLOAD_BYTES = 128 * 1024;
 

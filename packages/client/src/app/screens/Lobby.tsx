@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import type { RoomInfo } from '@aerocade/shared';
 import { appStore, useAppState } from '../store.js';
-import { browseRooms, hostMatch, joinMatch } from '../../game/net/netplay.js';
+import { bridgeUrl, browseRooms, hostMatch, joinMatch } from '../../game/net/netplay.js';
 
 /**
  * LAN lobby (docs/ui.md §7): host a room, or browse and join one.
@@ -97,11 +97,19 @@ export function Lobby({ mode }: { mode: 'host' | 'join' }): ReactElement {
         <div className="lobby-error" role="alert">
           {error}
           <div className="settings-note">
-            The bridge is the device running <code>npx aerocade-lan</code>. If you did not open this
-            page from it, add <code>?bridge=ip:port</code> to the URL.
+            Checklist: everyone on the <strong>same Wi-Fi</strong> (guest networks and “client
+            isolation” block this); the host is running the bridge; and you opened this page from
+            the host&apos;s address, not <code>localhost</code>. To point somewhere else, add{' '}
+            <code>?bridge=ip:port</code> to the URL.
           </div>
         </div>
       )}
+
+      {/* Shown before anything fails, not only after: seeing the address it will
+          dial is what turns "it does not work" into "that is the wrong machine". */}
+      <div className="lobby-target">
+        bridge: <code>{bridgeUrl()}</code>
+      </div>
 
       {mode === 'host' && error === null && <div className="hint">Opening a room…</div>}
 

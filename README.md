@@ -86,9 +86,10 @@ To actually host games (as opposed to the dev sandbox), build the PWA and run th
 ```bash
 npm run build        # builds shared, client (static PWA), and server
 npm run dev:server   # start the LAN bridge from the repo
-# or, without cloning the repo:
-npx aerocade-lan
 ```
+
+> The bridge is **not published to npm yet**, so `npx aerocade-lan` does not work —
+> run it from the repo. The `aerocade-lan` bin exists for when it is published.
 
 The bridge prints the join URL on startup, e.g.:
 
@@ -123,7 +124,7 @@ flowchart LR
 ```
 
 1. Put every device on the **same Wi-Fi network or phone hotspot**. No internet required.
-2. On one machine, run the bridge: `npx aerocade-lan` (or `npm run dev:server` from the repo).
+2. On one machine, run the bridge: `npm run dev:server` from the repo (`npx aerocade-lan` is not published yet).
 3. Everyone opens the printed `http://<lan-ip>:8080` URL. The bridge page also shows a **QR code**
    so phones can join with one scan.
 4. One player taps **Create Room** — their browser becomes the game host.

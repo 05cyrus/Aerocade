@@ -1,5 +1,7 @@
 import { MAX_PLAYERS } from '../constants.js';
 import { damageSystem } from './systems/damage.js';
+import { inputGateSystem } from './systems/input-gate.js';
+import { matchSystem } from './systems/match.js';
 import { movementSystem } from './systems/movement.js';
 import { physicsSystem } from './systems/physics.js';
 import { pickupsSystem } from './systems/pickups.js';
@@ -20,6 +22,7 @@ export function stepWorld(world: SimWorld): void {
   world.events.clear();
   world.damage.clear();
 
+  inputGateSystem(world);
   movementSystem(world);
   physicsSystem(world);
   weaponsSystem(world);
@@ -27,6 +30,7 @@ export function stepWorld(world: SimWorld): void {
   damageSystem(world);
   pickupsSystem(world);
   respawnSystem(world);
+  matchSystem(world);
 
   const p = world.players;
   for (let i = 0; i < MAX_PLAYERS; i++) {

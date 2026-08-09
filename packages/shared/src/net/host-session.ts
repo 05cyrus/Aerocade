@@ -3,14 +3,17 @@ import {
   captureSnapshot,
   decodeInput,
   encodeSnapshot,
+  encodeRoster,
   encodeWelcome,
   decodeJoinRequest,
   MsgId,
+  type RosterEntry,
   peekMsgId,
   type WireSnapshot,
 } from '../protocol/codec.js';
 import { PROTOCOL_VERSION } from '../protocol/messages.js';
 import { addPlayer, removePlayer } from '../sim/spawns.js';
+import { assignTeam } from '../sim/match.js';
 import { stepWorld } from '../sim/step.js';
 import { setInput, type SimWorld } from '../sim/world.js';
 import { Channel, type Transport } from './transport.js';
@@ -53,6 +56,8 @@ export interface HostSessionEvents {
 
 export class HostSession {
   private readonly clients = new Map<string, ClientState>();
+  /** Slot → display name. Names are not simulated, so they live here. */
+  private readonly names = new Map<number, string>();
   /** Inputs waiting to be applied on the next tick, by player slot. */
   private readonly queued = new Map<
     number,
@@ -126,6 +131,10 @@ export class HostSession {
       this.events.onRejected?.(peerId, 'room-full');
       return;
     }
+    // Balance the sides as people arrive, so a late joiner evens the teams out
+    // rather than piling onto whoever is already ahead. A no-op in FFA. After the
+    // full-room check, because there is no slot -1 to put on a team.
+    assignTeam(this.world, playerId);
     this.clients.set(peerId, {
       peerId,
       playerId,
@@ -134,8 +143,44 @@ export class HostSession {
       ackTick: 0,
       history: new Map(),
     });
+    this.names.set(playerId, request.name);
     this.sendWelcome(peerId, playerId);
+    // After WELCOME so the new client already knows its own slot when the roster
+    // lands, and broadcast rather than unicast because everyone else needs the
+    // newcomer's name too.
+    this.broadcastRoster();
     this.events.onPlayerJoined?.(peerId, playerId, request.name);
+  }
+
+  /**
+   * Name a player the host knows about outside the join path — in practice only
+   * itself, since it never sends itself a JOIN_REQ.
+   */
+  setName(slot: number, name: string): void {
+    this.names.set(slot, name);
+    this.broadcastRoster();
+  }
+
+  /**
+   * Send the whole roster to everyone.
+   *
+   * Whole rather than incremental: it is under 150 bytes for a full match, and a
+   * client that missed one join/leave delta would show a wrong name for the rest
+   * of the match with nothing to correct it.
+   */
+  private broadcastRoster(): void {
+    const entries: RosterEntry[] = [];
+    for (const [slot, name] of this.names) {
+      if (this.world.players.connected[slot] === 1) entries.push({ slot, name });
+    }
+    entries.sort((a, b) => a.slot - b.slot);
+    const bytes = encodeRoster(entries);
+    for (const peerId of this.clients.keys()) this.transport.send(peerId, Channel.Ctrl, bytes);
+  }
+
+  /** Slot → name, for the host's own scoreboard. */
+  nameOf(slot: number): string | null {
+    return this.names.get(slot) ?? null;
   }
 
   private sendWelcome(peerId: string, playerId: number): void {
@@ -184,7 +229,11 @@ export class HostSession {
     if (client === undefined) return;
     this.clients.delete(peerId);
     this.queued.delete(client.playerId);
+    this.names.delete(client.playerId);
     removePlayer(this.world, client.playerId);
+    // Re-broadcast after removing the slot, so nobody keeps a name for a player
+    // who has gone — the scoreboard would otherwise list a ghost.
+    this.broadcastRoster();
     this.events.onPlayerLeft?.(peerId, client.playerId);
   }
 

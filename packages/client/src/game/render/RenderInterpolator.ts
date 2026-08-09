@@ -10,6 +10,9 @@ export class RenderInterpolator {
   readonly prevPlayerX = new Float64Array(MAX_PLAYERS);
   readonly prevPlayerY = new Float64Array(MAX_PLAYERS);
   readonly currPlayerX = new Float64Array(MAX_PLAYERS);
+  /** Render-only offsets, for blending prediction corrections. */
+  private readonly offsetX = new Float64Array(MAX_PLAYERS);
+  private readonly offsetY = new Float64Array(MAX_PLAYERS);
   readonly currPlayerY = new Float64Array(MAX_PLAYERS);
   readonly prevAim = new Float32Array(MAX_PLAYERS);
   readonly currAim = new Float32Array(MAX_PLAYERS);
@@ -51,14 +54,35 @@ export class RenderInterpolator {
     }
   }
 
+  /**
+   * A render-only nudge for one player, added by `playerX`/`playerY`.
+   *
+   * Used to blend away a prediction correction (docs/networking.md §7): the
+   * simulation jumps to the host's answer immediately while the drawn position
+   * slides there over ~100 ms. Applied here rather than at each draw site so the
+   * camera, the rig and the muzzle all agree about where the player is — three
+   * separately-offset copies of one position is how a gun ends up firing from
+   * beside its owner.
+   */
+  setRenderOffset(i: number, x: number, y: number): void {
+    this.offsetX[i] = x;
+    this.offsetY[i] = y;
+  }
+
   playerX(i: number, alpha: number): number {
-    if (this.playerFresh[i] === 1) return this.currPlayerX[i] ?? 0;
-    return lerp(this.prevPlayerX[i] ?? 0, this.currPlayerX[i] ?? 0, alpha);
+    const base =
+      this.playerFresh[i] === 1
+        ? (this.currPlayerX[i] ?? 0)
+        : lerp(this.prevPlayerX[i] ?? 0, this.currPlayerX[i] ?? 0, alpha);
+    return base + (this.offsetX[i] ?? 0);
   }
 
   playerY(i: number, alpha: number): number {
-    if (this.playerFresh[i] === 1) return this.currPlayerY[i] ?? 0;
-    return lerp(this.prevPlayerY[i] ?? 0, this.currPlayerY[i] ?? 0, alpha);
+    const base =
+      this.playerFresh[i] === 1
+        ? (this.currPlayerY[i] ?? 0)
+        : lerp(this.prevPlayerY[i] ?? 0, this.currPlayerY[i] ?? 0, alpha);
+    return base + (this.offsetY[i] ?? 0);
   }
 
   playerAim(i: number, alpha: number): number {

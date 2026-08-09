@@ -316,6 +316,159 @@ body,
   text-shadow: 0 0 12px rgba(60, 214, 255, 0.6);
 }
 
+/* Match bar: centred at the top, above the back button's row. */
+.match-bar {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 2px 12px;
+  border-radius: 6px;
+  background: rgba(12, 18, 15, 0.55);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.match-clock {
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: var(--ac-text);
+}
+
+.match-limit {
+  font-size: 13px;
+  color: var(--ac-dim);
+}
+
+/* Countdown: unmissable, but never in the way of a pointer. */
+.match-warmup {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.match-warmup-count {
+  font-size: 68px;
+  line-height: 1;
+  color: var(--ac-text);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+}
+
+.match-warmup-label {
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ac-dim);
+}
+
+/* Scoreboard. z-index 8: over the HUD (6) and touch layer (5), under the
+   connection-lost notice (10) — a dead match outranks the score. */
+.scoreboard {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 8;
+  min-width: min(420px, 88vw);
+  max-height: 84vh;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 14px 18px;
+  border: 1px solid rgba(124, 138, 176, 0.35);
+  border-radius: 8px;
+  background: rgba(10, 16, 13, 0.9);
+  pointer-events: none;
+}
+
+/* Only the final panel is interactive — it has the way out. */
+.scoreboard-final {
+  pointer-events: auto;
+}
+
+.scoreboard-result {
+  font-size: 26px;
+  letter-spacing: 0.1em;
+  color: var(--ac-accent2);
+}
+
+.scoreboard-mode {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ac-dim);
+}
+
+.scoreboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoreboard-table th,
+.scoreboard-table td {
+  padding: 3px 8px;
+  text-align: right;
+  font-size: 13px;
+}
+
+.scoreboard-table th {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ac-dim);
+  border-bottom: 1px solid rgba(124, 138, 176, 0.25);
+}
+
+.scoreboard-table .col-name {
+  text-align: left;
+  color: var(--ac-text);
+}
+
+.scoreboard-table .is-local {
+  background: rgba(124, 138, 176, 0.14);
+}
+
+.scoreboard-table .is-winner .col-name {
+  color: var(--ac-accent2);
+}
+
+.team-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: baseline;
+}
+
+.team-dot.team-0 {
+  background: #6b7040;
+}
+
+.team-dot.team-1 {
+  background: #a8542c;
+}
+
+.scoreboard-exit {
+  margin-top: 4px;
+  background: var(--ac-panel);
+  color: var(--ac-text);
+  border: 1px solid var(--ac-accent2);
+  border-radius: 6px;
+  padding: 6px 18px;
+  font: inherit;
+  cursor: pointer;
+}
+
 /* Above the HUD (6) and the touch layer (5), below the rotate prompt (20): a
    dead match must not be reachable *through* the notice, and the stick zones
    would otherwise swallow the dismiss button exactly as they once did the

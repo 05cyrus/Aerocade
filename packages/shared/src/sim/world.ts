@@ -10,6 +10,7 @@ import {
 } from '../constants.js';
 import { Rng } from '../math/rng.js';
 import { EventBuffer } from './events.js';
+import { MatchState } from './match/state.js';
 import { emptyInput, type InputCommand } from './input.js';
 import type { MapDef } from './map/mapdef.js';
 
@@ -312,6 +313,8 @@ export interface SimWorld {
   readonly pads: WeaponPadPool;
   readonly damage: DamageQueue;
   readonly events: EventBuffer;
+  /** Phase, clock, limits and team scores. Snapshot-serialised (docs/roadmap M4). */
+  readonly match: MatchState;
   /** Current-tick input per player slot; set via `setInput` before stepping. */
   readonly inputs: readonly InputCommand[];
 }
@@ -331,6 +334,7 @@ export function createWorld(map: MapDef, seed: number): SimWorld {
     pads: new WeaponPadPool(),
     damage: new DamageQueue(),
     events: new EventBuffer(),
+    match: new MatchState(),
     inputs: Array.from({ length: MAX_PLAYERS }, () => emptyInput()),
   };
 }
@@ -359,6 +363,7 @@ export interface Snapshot {
   projectiles: ProjectilePool;
   pickups: PickupPool;
   pads: WeaponPadPool;
+  match: MatchState;
 }
 
 export function createSnapshot(): Snapshot {
@@ -369,6 +374,7 @@ export function createSnapshot(): Snapshot {
     projectiles: new ProjectilePool(),
     pickups: new PickupPool(),
     pads: new WeaponPadPool(),
+    match: new MatchState(),
   };
 }
 
@@ -379,6 +385,7 @@ export function takeSnapshot(world: SimWorld, out: Snapshot): Snapshot {
   copyArrays(world.projectiles.all, out.projectiles.all);
   copyArrays(world.pickups.all, out.pickups.all);
   copyArrays(world.pads.all, out.pads.all);
+  out.match.copyFrom(world.match);
   return out;
 }
 
@@ -389,6 +396,7 @@ export function restoreSnapshot(world: SimWorld, snap: Snapshot): void {
   copyArrays(snap.projectiles.all, world.projectiles.all);
   copyArrays(snap.pickups.all, world.pickups.all);
   copyArrays(snap.pads.all, world.pads.all);
+  world.match.copyFrom(snap.match);
 }
 
 /**
@@ -409,7 +417,29 @@ export function stateHash(world: SimWorld): number {
   mix((world.rng.state >>> 8) & 0xff);
   mix((world.rng.state >>> 16) & 0xff);
   mix((world.rng.state >>> 24) & 0xff);
-  const pools = [world.players.all, world.projectiles.all, world.pickups.all, world.pads.all];
+  // Match state is hashed too: a desync in phase, clock or team score is exactly
+  // as fatal as one in a position, and would otherwise pass every determinism test.
+  const m = world.match;
+  for (const scalar of [
+    m.mode,
+    m.phase,
+    m.phaseStartTick,
+    m.timeLimitTicks,
+    m.fragLimit,
+    m.winner,
+  ]) {
+    mix(scalar & 0xff);
+    mix((scalar >>> 8) & 0xff);
+    mix((scalar >>> 16) & 0xff);
+    mix((scalar >>> 24) & 0xff);
+  }
+  const pools = [
+    world.players.all,
+    world.projectiles.all,
+    world.pickups.all,
+    world.pads.all,
+    [m.teamFrags],
+  ];
   for (const pool of pools) {
     for (const arr of pool) {
       const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);

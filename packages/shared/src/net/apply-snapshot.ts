@@ -1,5 +1,6 @@
 import { MAX_PICKUPS, MAX_PLAYERS, MAX_PROJECTILES, WEAPON_SLOTS } from '../constants.js';
 import { PlayerFlag, type WireSnapshot } from '../protocol/codec.js';
+import { depenetrate } from '../sim/systems/physics.js';
 import type { SimWorld } from '../sim/world.js';
 
 /**
@@ -30,7 +31,10 @@ export function applySnapshotToWorld(world: SimWorld, snapshot: WireSnapshot): v
     p.connected[i] = 1;
     p.status[i] = (record.flags & PlayerFlag.Alive) !== 0 ? 1 : 0;
     p.posX[i] = record.x;
-    p.posY[i] = record.y;
+    // Lift out of any tile the wire's rounding pushed us into. Without this a
+    // predicting client is ejected sideways on the tick after every snapshot
+    // (see `depenetrate`), which is the single worst artefact prediction can add.
+    p.posY[i] = depenetrate(world.map, record.x, record.y);
     p.velX[i] = record.vx;
     p.velY[i] = record.vy;
     p.aim[i] = record.aim;
@@ -41,6 +45,10 @@ export function applySnapshotToWorld(world: SimWorld, snapshot: WireSnapshot): v
     // the exact remaining seconds are not on the wire and are not needed.
     p.protect[i] = (record.flags & PlayerFlag.SpawnProtected) !== 0 ? 1 : 0;
     p.reload[i] = (record.flags & PlayerFlag.Reloading) !== 0 ? 1 : 0;
+
+    p.kills[i] = record.kills;
+    p.deaths[i] = record.deaths;
+    p.team[i] = record.team;
 
     const slot = p.weaponSlot[i] ?? 0;
     p.weapons[i * WEAPON_SLOTS + slot] = record.weapon;
@@ -69,6 +77,18 @@ export function applySnapshotToWorld(world: SimWorld, snapshot: WireSnapshot): v
     pr.velX[i] = record.vx;
     pr.velY[i] = record.vy;
   }
+
+  // The match block is sent whole in every snapshot, so a client knows the phase,
+  // both clocks and the score from the first frame it decodes — a late joiner sees
+  // "3:41 left, 14-9" immediately rather than after the next phase change.
+  const m = world.match;
+  m.mode = snapshot.match.mode;
+  m.phase = snapshot.match.phase;
+  m.winner = snapshot.match.winner;
+  m.phaseStartTick = snapshot.match.phaseStartTick;
+  m.timeLimitTicks = snapshot.match.timeLimitTicks;
+  m.fragLimit = snapshot.match.fragLimit;
+  for (let t = 0; t < m.teamFrags.length; t++) m.teamFrags[t] = snapshot.match.teamFrags[t] ?? 0;
 
   const pk = world.pickups;
   pk.alive.fill(0);

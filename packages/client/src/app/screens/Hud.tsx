@@ -1,5 +1,7 @@
 import type { ReactElement } from 'react';
+import { MatchPhase } from '@aerocade/shared';
 import { appStore, useAppState } from '../store.js';
+import { Scoreboard } from './Scoreboard.js';
 
 /**
  * Print a zoom factor exactly: 1 → "1", 2.3 → "2.3", 1.65 → "1.65".
@@ -11,6 +13,13 @@ function formatZoom(zoom: number): string {
   return String(Math.round(zoom * 100) / 100);
 }
 
+/** m:ss, so 65 s reads as 1:05 rather than 65. */
+function formatClock(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(whole / 60);
+  return `${String(mins)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
 export function Hud(): ReactElement {
   const hud = useAppState((s) => s.hud);
   const killFeed = useAppState((s) => s.killFeed);
@@ -20,6 +29,7 @@ export function Hud(): ReactElement {
   const scopeZoom = useAppState((s) => s.scopeZoom);
   const weaponIcons = useAppState((s) => s.weaponIcons);
   const muted = useAppState((s) => s.settings.muted);
+  const match = useAppState((s) => s.match);
   const icon = weaponIcons[hud.weaponId];
   const otherIcon = weaponIcons[hud.otherWeaponId];
 
@@ -28,6 +38,28 @@ export function Hud(): ReactElement {
 
   return (
     <div className="hud">
+      {match !== null && (
+        <div className="match-bar">
+          <span className="match-clock">
+            {match.timeLeft === null ? '∞' : formatClock(match.timeLeft)}
+          </span>
+          {match.fragLimit > 0 && (
+            <span className="match-limit">
+              {hud.kills}/{match.fragLimit}
+            </span>
+          )}
+        </div>
+      )}
+
+      {match !== null && match.phase === MatchPhase.Warmup && (
+        <div className="match-warmup" role="status">
+          <div className="match-warmup-count">{Math.max(1, match.warmupLeft)}</div>
+          <div className="match-warmup-label">weapons locked</div>
+        </div>
+      )}
+
+      <Scoreboard />
+
       <div className="hud-corner hud-bottom-left">
         <div>
           <div className="bar-label">HULL</div>

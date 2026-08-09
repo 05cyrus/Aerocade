@@ -70,6 +70,15 @@ ADR. See [architecture.md](architecture.md).
   covered by codec round-trip tests.
 - Playwright: full FFA match to frag limit between two contexts, winner shown identically.
 
+**Status (ADR-031).** FFA is done and verified: warmup countdown with weapons locked, the match
+clock, the frag limit, the held-Tab scoreboard, the end screen, and back to the menu. Match state
+lives in the sim, is snapshot-serialised, is covered by the state hash, and rides every snapshot,
+so a joining client shows the same clock and score as the host. The two-context frag-limit run
+passes with both sides naming the same winner. Player names arrive over `H2C_ROSTER` (ADR-032), so
+the scoreboard shows what players actually chose. TDM's ruleset, team balancing and team scoring are
+implemented and tested but not yet selectable in the lobby; CTF is unstarted. One gap remains: there
+is no **rematch button** (`restartMatch` exists and is tested, but nothing calls it).
+
 ### M5 — Input breadth, settings, audio
 
 - Mobile twin virtual sticks (left move; right aim + fire past deadzone threshold) plus

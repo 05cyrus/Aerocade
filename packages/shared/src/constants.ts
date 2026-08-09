@@ -35,3 +35,14 @@ export const WEAPON_SLOTS = 2;
 
 /** Sentinel for "no player" in ownership/attribution fields. */
 export const NO_PLAYER = -1;
+
+/**
+ * Scope sentinel for the player-iterating systems: run for everybody.
+ *
+ * The systems take an optional slot so a client can re-simulate **only its own
+ * player** during reconciliation (docs/networking.md §7) through the exact same
+ * code the host runs. A separate "predict one player" implementation would be two
+ * physics engines that must agree forever, which is the one thing determinism
+ * cannot survive.
+ */
+export const ALL_PLAYERS = -1;

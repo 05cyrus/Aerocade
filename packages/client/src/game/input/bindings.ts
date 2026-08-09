@@ -32,6 +32,8 @@ export const InputAction = {
   SwitchWeapon: 'switchWeapon',
   Interact: 'interact',
   Scope: 'scope',
+  /** Hold to show the scoreboard. Presentation only — never enters the sim. */
+  Scoreboard: 'scoreboard',
 } as const;
 
 export type InputAction = (typeof InputAction)[keyof typeof InputAction];
@@ -57,6 +59,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   [InputAction.SwitchWeapon]: ['KeyQ'],
   [InputAction.Interact]: ['KeyE'],
   [InputAction.Scope]: ['KeyZ'],
+  [InputAction.Scoreboard]: ['Tab'],
 };
 
 /** Human-readable rows for the settings table, in display order. */
@@ -74,6 +77,7 @@ export const ACTION_LABELS: Record<InputAction, string> = {
   [InputAction.SwitchWeapon]: 'Switch weapon',
   [InputAction.Interact]: 'Take weapon from pad',
   [InputAction.Scope]: 'Scope',
+  [InputAction.Scoreboard]: 'Scoreboard (hold)',
 };
 
 /**
@@ -97,6 +101,7 @@ export const ACTION_BUTTON: Record<InputAction, ButtonMask | null> = {
   [InputAction.SwitchWeapon]: Buttons.SwitchWeapon,
   [InputAction.Interact]: Buttons.Interact,
   [InputAction.Scope]: null,
+  [InputAction.Scoreboard]: null,
 };
 
 /** Pseudo-code for a mouse button, so it shares the keyboard's string space. */

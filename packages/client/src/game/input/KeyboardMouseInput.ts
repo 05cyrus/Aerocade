@@ -37,8 +37,11 @@ export class KeyboardMouseInput {
     this.down.add(e.code);
     this.latched.add(e.code);
     if (this.isBound(InputAction.Scope, e.code)) this.scopeToggled = true;
-    // Space scrolls the page; suppress it only when it is actually bound.
-    if (e.code === 'Space' && this.isAnyBinding(e.code)) e.preventDefault();
+    // Space scrolls the page and Tab walks focus off the canvas, which silently
+    // kills every subsequent keystroke. Suppress either only when actually bound.
+    if ((e.code === 'Space' || e.code === 'Tab') && this.isAnyBinding(e.code)) {
+      e.preventDefault();
+    }
   };
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
@@ -111,7 +114,13 @@ export class KeyboardMouseInput {
   }
 
   /** Drain accumulated state into (moveX, moveY, buttons) for one tick. */
-  sample(): { moveX: number; moveY: number; buttons: ButtonMask; scopeToggled: boolean } {
+  sample(): {
+    moveX: number;
+    moveY: number;
+    buttons: ButtonMask;
+    scopeToggled: boolean;
+    scoreboard: boolean;
+  } {
     let moveX = 0;
     if (this.active(InputAction.MoveLeft)) moveX -= 1;
     if (this.active(InputAction.MoveRight)) moveX += 1;
@@ -128,7 +137,10 @@ export class KeyboardMouseInput {
 
     const scopeToggled = this.scopeToggled;
     this.scopeToggled = false;
+    // Held, not latched: the scoreboard is shown while the key is down, so a
+    // latched tap would leave it up for a tick after release.
+    const scoreboard = this.bindings[InputAction.Scoreboard].some((code) => this.down.has(code));
     this.latched = new Set();
-    return { moveX, moveY, buttons, scopeToggled };
+    return { moveX, moveY, buttons, scopeToggled, scoreboard };
   }
 }

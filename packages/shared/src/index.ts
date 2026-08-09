@@ -21,12 +21,17 @@ export * from './sim/map/export.js';
 export * from './sim/world.js';
 export * from './sim/spawns.js';
 export * from './sim/match.js';
+export * from './sim/match/modes.js';
+export * from './sim/match/state.js';
 export * from './sim/step.js';
+export * from './sim/predict.js';
 export { movementSystem } from './sim/systems/movement.js';
-export { physicsSystem } from './sim/systems/physics.js';
+export { physicsSystem, depenetrate } from './sim/systems/physics.js';
 export { weaponsSystem } from './sim/systems/weapons.js';
 export { projectilesSystem } from './sim/systems/projectiles.js';
 export { damageSystem } from './sim/systems/damage.js';
+export { inputGateSystem } from './sim/systems/input-gate.js';
+export { matchSystem, leader, restartMatch } from './sim/systems/match.js';
 export {
   pickupsSystem,
   initPickups,

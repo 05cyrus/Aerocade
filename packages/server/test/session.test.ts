@@ -19,6 +19,7 @@ import {
   type WeaponId,
   type SocketCallbacks,
   type SocketLike,
+  type RosterEntry,
 } from '@aerocade/shared';
 import { createBridge, type Bridge } from '../src/bridge.js';
 
@@ -151,6 +152,7 @@ async function match(clientTuningHash = HASH) {
       client.receive(peer, channel, bytes);
     },
   });
+  const rosters: RosterEntry[][] = [];
   const client = new ClientSession(
     clientWorld,
     clientTransport,
@@ -159,6 +161,9 @@ async function match(clientTuningHash = HASH) {
     {
       onVersionMismatch: (hostHash) => {
         mismatches.push(hostHash);
+      },
+      onRoster: (entries) => {
+        rosters.push([...entries]);
       },
     },
   );
@@ -173,7 +178,18 @@ async function match(clientTuningHash = HASH) {
     }
   };
 
-  return { host, client, hostWorld, clientWorld, hostPlayer, joins, mismatches, run, clientBridge };
+  return {
+    host,
+    client,
+    hostWorld,
+    clientWorld,
+    hostPlayer,
+    joins,
+    mismatches,
+    run,
+    clientBridge,
+    rosters,
+  };
 }
 
 describe('host/client session over the bridge', () => {
@@ -298,5 +314,60 @@ describe('sequence wrap', () => {
     expect(isNewerSeq(100, 99)).toBe(true);
     expect(isNewerSeq(99, 100)).toBe(false);
     expect(isNewerSeq(5, 5)).toBe(false);
+  });
+});
+
+describe('roster: names reach the other side', () => {
+  it('publishes every player’s name to a joining client', async () => {
+    // Without this the scoreboard shows "Player 2" for everyone but yourself,
+    // which was the visible shortfall when the match UI first shipped.
+    const { host, client, hostPlayer, run } = await match();
+    host.setName(hostPlayer, 'Hostname');
+    client.requestJoin('Guest');
+    await until(() => client.joined, 'welcome');
+    await until(() => client.nameOf(client.playerId) === 'Guest', 'roster');
+
+    expect(client.nameOf(hostPlayer)).toBe('Hostname');
+    expect(client.nameOf(client.playerId)).toBe('Guest');
+    // And the host can name both sides for its own scoreboard.
+    expect(host.nameOf(hostPlayer)).toBe('Hostname');
+    expect(host.nameOf(client.playerId)).toBe('Guest');
+    await run(2);
+  });
+
+  it('returns null for a slot nobody occupies', async () => {
+    const { client, run } = await match();
+    client.requestJoin('Guest');
+    await until(() => client.joined, 'welcome');
+    expect(client.nameOf(6)).toBeNull();
+    await run(2);
+  });
+
+  it('drops a name when its player leaves, so no ghost is listed', async () => {
+    const { host, client, clientBridge, run } = await match();
+    host.setName(0, 'Hostname');
+    client.requestJoin('Guest');
+    await until(() => client.joined, 'welcome');
+    const guestSlot = client.playerId;
+    await until(() => host.nameOf(guestSlot) === 'Guest', 'host knows the guest');
+
+    clientBridge.close();
+    await until(() => host.playerCount === 1, 'slot freed');
+    expect(host.nameOf(guestSlot)).toBeNull();
+    expect(host.nameOf(0)).toBe('Hostname');
+    await run(2);
+  });
+
+  it('sends the roster whole, not as a stream of joins', async () => {
+    // A client that missed one delta would show a wrong name for the rest of the
+    // match; a whole roster is self-healing.
+    const { host, client, hostPlayer, rosters, run } = await match();
+    host.setName(hostPlayer, 'Hostname');
+    client.requestJoin('Guest');
+    await until(() => rosters.length > 0, 'roster');
+    const last = rosters[rosters.length - 1];
+    if (last === undefined) throw new Error('no roster');
+    expect(last.map((e) => e.slot).sort((a, b) => a - b)).toEqual([hostPlayer, client.playerId]);
+    await run(2);
   });
 });

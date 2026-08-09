@@ -20,6 +20,8 @@ function fakeHandle(): NetHandle & { closes: number; lose: (reason: string) => v
     room: null,
     tick: () => undefined,
     playerCount: () => 2,
+    nameOf: () => null,
+    renderOffset: () => ({ x: 0, y: 0 }),
     onLost: latch.onLost,
     closes: 0,
     lose: latch.lose,

@@ -1,4 +1,4 @@
-import { MAX_PLAYERS, SIM_DT, WEAPON_SLOTS } from '../../constants.js';
+import { MAX_PLAYERS, SIM_DT, WEAPON_SLOTS, ALL_PLAYERS } from '../../constants.js';
 import { angleDelta } from '../../math/scalar.js';
 import { SimEventType } from '../events.js';
 import { rayVsAabb, raycastTiles, aabbOverlapsSolid } from '../geometry.js';
@@ -12,10 +12,11 @@ import { ProjectileKind, type SimWorld } from '../world.js';
  * firing, melee, and grenade throws. Damage is queued, never applied here —
  * the damage system owns health so ordering stays deterministic.
  */
-export function weaponsSystem(world: SimWorld): void {
+export function weaponsSystem(world: SimWorld, only: number = ALL_PLAYERS): void {
   const p = world.players;
 
   for (let i = 0; i < MAX_PLAYERS; i++) {
+    if (only !== ALL_PLAYERS && i !== only) continue;
     if (p.connected[i] !== 1 || p.status[i] !== 1) continue;
 
     const cmd = world.inputs[i];

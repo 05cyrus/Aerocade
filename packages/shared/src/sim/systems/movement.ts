@@ -1,4 +1,4 @@
-import { MAX_PLAYERS, SIM_DT } from '../../constants.js';
+import { MAX_PLAYERS, SIM_DT, ALL_PLAYERS } from '../../constants.js';
 import { approach } from '../../math/scalar.js';
 import { Buttons } from '../input.js';
 import { aabbTouchesLadder } from '../map/mapdef.js';
@@ -10,12 +10,13 @@ import type { SimWorld } from '../world.js';
  * fuel, and timers. Position integration and collision belong to the physics
  * system. y grows downward, so "up" is negative velY.
  */
-export function movementSystem(world: SimWorld): void {
+export function movementSystem(world: SimWorld, only: number = ALL_PLAYERS): void {
   const p = world.players;
   const t = TUNING.player;
   const jet = TUNING.jetpack;
 
   for (let i = 0; i < MAX_PLAYERS; i++) {
+    if (only !== ALL_PLAYERS && i !== only) continue;
     if (p.connected[i] !== 1) continue;
 
     // Timers that run for connected players regardless of life state.

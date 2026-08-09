@@ -1,11 +1,13 @@
 import {
   addPlayer,
+  assignTeam,
   BridgeClient,
   Channel,
   ClientSession,
   createMapById,
   createMatch,
   createWorld,
+  DEFAULT_MATCH_RULES,
   HostSession,
   isMapId,
   MAP_IDS,
@@ -103,6 +105,19 @@ export interface NetHandle {
   /** Players currently in the match, for the lobby/HUD. */
   playerCount(): number;
   /**
+   * The name the host published for a slot, or null if it has not.
+   *
+   * Names are not simulated (docs/ecs.md), so they arrive on their own message
+   * rather than in a snapshot — which means the scoreboard can show a real name
+   * instead of "Player 2" without spending a kilobyte a second repeating it.
+   */
+  nameOf(slot: number): string | null;
+  /**
+   * Render-only offset for the local player, blending away a prediction
+   * correction. Zero on a host, and zero on a client whose prediction was right.
+   */
+  renderOffset(): { x: number; y: number };
+  /**
    * Register the listener told when the match ends on its own — the socket
    * dropped, or the host left. Without this a dead connection presents as a
    * frozen world with no explanation, which is the worst failure mode available:
@@ -140,8 +155,11 @@ export function lossLatch(): {
 /** Create a room and host it. The host plays; it is not a spectating server. */
 export async function hostMatch(mapId: MapId, playerName: string): Promise<NetHandle> {
   const seed = Date.now() >>> 0;
-  const world = createMatch(createMapById(mapId), seed);
+  // A real match, not the sandbox: countdown, clock and frag limit. The sandbox
+  // default would give a LAN game no way to end (ADR-031).
+  const world = createMatch(createMapById(mapId), seed, DEFAULT_MATCH_RULES);
   const localPlayer = addPlayer(world);
+  assignTeam(world, localPlayer);
 
   let session: HostSession | null = null;
   const loss = lossLatch();
@@ -178,6 +196,8 @@ export async function hostMatch(mapId: MapId, playerName: string): Promise<NetHa
     },
   });
   session = host;
+  // The host never sends itself a JOIN_REQ, so it has to name itself.
+  host.setName(localPlayer, playerName);
   return {
     kind: 'host',
     world,
@@ -188,6 +208,9 @@ export async function hostMatch(mapId: MapId, playerName: string): Promise<NetHa
       host.tick(input);
     },
     playerCount: () => host.playerCount,
+    nameOf: (slot) => host.nameOf(slot),
+    // A host predicts nothing: its own simulation is the answer.
+    renderOffset: () => ({ x: 0, y: 0 }),
     onLost: loss.onLost,
     close: () => {
       bridge.leaveRoom();
@@ -306,6 +329,8 @@ export async function joinMatch(
         for (const connected of world.players.connected) if (connected === 1) count += 1;
         return count;
       },
+      nameOf: (slot) => client.nameOf(slot),
+      renderOffset: () => client.renderOffset,
       onLost: loss.onLost,
       close: () => {
         bridge.leaveRoom();

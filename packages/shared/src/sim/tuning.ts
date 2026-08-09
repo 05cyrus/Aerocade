@@ -163,9 +163,20 @@ export const TUNING = {
     dropArmDelay: 0.6,
   },
   match: {
-    /** Default match length (used from M4; the sandbox ignores it). */
+    /** Default live-phase length. 0 would mean "no time limit". */
     durationSeconds: 480,
+    /** Points per frag, for the scoreboard. Frags decide the match, points show it. */
     killScore: 100,
+    /**
+     * Frags that win a match. Long enough that one lucky streak does not end it,
+     * short enough to finish inside the time limit on a busy server.
+     */
+    fragLimit: 25,
+    /**
+     * Countdown before the match goes live. Players can move during it but not
+     * shoot, so everyone has landed somewhere sensible before frags count.
+     */
+    warmupSeconds: 5,
   },
 } as const;
 

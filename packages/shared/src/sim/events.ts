@@ -26,6 +26,8 @@ export const SimEventType = {
   PickupTaken: 12,
   /** Gear hit the ground from a weapon swap or a death. */
   PickupDropped: 13,
+  /** The match changed phase. a=new MatchPhase, b=winning entrant or NO_PLAYER. */
+  MatchPhase: 14,
 } as const;
 
 export type SimEventType = (typeof SimEventType)[keyof typeof SimEventType];
@@ -44,6 +46,7 @@ export type SimEventType = (typeof SimEventType)[keyof typeof SimEventType];
  * - GrenadeThrow:  a=player, x/y=throw origin
  * - Trace:         a=shooter, b=weaponId, x/y=pellet path endpoint
  * - PickupSpawn:   a=padIndex, b=weaponId, x/y=pad position
+ * - MatchPhase:    a=new phase (MatchPhase), b=winning entrant or NO_PLAYER
  * - PickupTaken:   a=player, b=weaponId (-1 for grenades), x/y=item position.
  *                  r means different things per kind: for a weapon it is 1
  *                  when the ammo merged into a gun already carried, 0 on a
@@ -64,6 +67,15 @@ export interface SimEvent {
 export class EventBuffer {
   private readonly pool: SimEvent[];
   private len = 0;
+  /**
+   * While set, `emit` drops everything.
+   *
+   * Reconciliation re-runs already-simulated ticks (docs/networking.md §7), and
+   * those ticks emitted their events the first time round. Without suppression a
+   * client would fire the same gunshot again on every snapshot — the correction
+   * would be *audible*, which is a worse artefact than the misprediction it fixes.
+   */
+  private suppressed = false;
 
   constructor() {
     this.pool = Array.from({ length: MAX_EVENTS }, () => ({
@@ -92,7 +104,15 @@ export class EventBuffer {
     this.len = 0;
   }
 
+  /** Silence `emit` during a replay; returns the previous setting. */
+  setSuppressed(suppressed: boolean): boolean {
+    const previous = this.suppressed;
+    this.suppressed = suppressed;
+    return previous;
+  }
+
   emit(type: SimEventType, a: number, b: number, x: number, y: number, r = 0): void {
+    if (this.suppressed) return; // re-simulated tick: it already announced itself
     if (this.len >= MAX_EVENTS) return; // saturated: drop rather than allocate
     const ev = this.pool[this.len];
     if (ev === undefined) return;

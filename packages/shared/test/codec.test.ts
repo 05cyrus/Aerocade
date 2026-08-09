@@ -9,12 +9,14 @@ import {
   decodeAim,
   decodeInput,
   decodeJoinRequest,
+  decodeRoster,
   decodeSnapshot,
   decodeWelcome,
   encodeAim,
   encodeInput,
   encodeJoinRequest,
   encodePos,
+  encodeRoster,
   encodeSnapshot,
   encodeVel,
   encodeWelcome,
@@ -363,5 +365,50 @@ describe('tuningHash', () => {
     expect(hash).toBeGreaterThanOrEqual(0);
     expect(hash).toBeLessThanOrEqual(0xffffffff);
     expect(Number.isInteger(hash)).toBe(true);
+  });
+});
+
+describe('roster', () => {
+  it('round-trips slots and names', () => {
+    const entries = [
+      { slot: 0, name: 'Pilot' },
+      { slot: 3, name: 'Wrenchie' },
+      { slot: 7, name: 'Ø Ünïcode ✈' },
+    ];
+    expect(decodeRoster(encodeRoster(entries))).toEqual(entries);
+  });
+
+  it('truncates a long name to the wire limit instead of overflowing', () => {
+    const decoded = decodeRoster(encodeRoster([{ slot: 1, name: 'x'.repeat(64) }]));
+    // 16 bytes is the cap shared with JOIN_REQ.
+    expect(decoded[0]?.name.length).toBe(16);
+  });
+
+  it('handles an empty roster', () => {
+    expect(decodeRoster(encodeRoster([]))).toEqual([]);
+  });
+
+  it('stops at a truncated frame rather than reading past the end', () => {
+    // This arrives from the network, so a bad length is an expected input, not an
+    // impossible one.
+    const full = encodeRoster([
+      { slot: 0, name: 'Alpha' },
+      { slot: 1, name: 'Beta' },
+    ]);
+    for (let cut = 2; cut < full.length; cut++) {
+      const decoded = decodeRoster(full.subarray(0, cut));
+      expect(decoded.length, `cut at ${String(cut)}`).toBeLessThanOrEqual(2);
+      for (const entry of decoded) expect(typeof entry.name).toBe('string');
+    }
+  });
+
+  it('rejects a frame that is not a roster', () => {
+    expect(() => decodeRoster(encodeJoinRequest({ protocolVersion: 1, name: 'x' }))).toThrow();
+  });
+
+  it('is small enough to resend whole on every change', () => {
+    // The whole point of sending it whole rather than as join/leave deltas.
+    const full = Array.from({ length: 8 }, (_, i) => ({ slot: i, name: 'SixteenCharName!' }));
+    expect(encodeRoster(full).length).toBeLessThan(200);
   });
 });

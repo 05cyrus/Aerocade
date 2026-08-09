@@ -10,6 +10,11 @@ import {
   createMapById,
   createMatch,
   findPickupUnderPlayer,
+  MatchPhase,
+  NO_WINNER,
+  rulesetFor,
+  timeRemainingSeconds,
+  warmupRemainingSeconds,
   setInput,
   stepWorld,
   weaponDef,
@@ -17,7 +22,7 @@ import {
   type SimWorld,
   type WeaponId,
 } from '@aerocade/shared';
-import { appStore, type HudState } from '../app/store.js';
+import { appStore, type HudState, type Standing } from '../app/store.js';
 import { KeyboardMouseInput } from './input/KeyboardMouseInput.js';
 import { touchInput } from './input/TouchInput.js';
 import { GamepadInput } from './input/GamepadInput.js';
@@ -31,6 +36,9 @@ const MAX_CATCHUP_TICKS = 8;
 const HUD_EVERY_TICKS = 6;
 
 const DUMMY_NAMES = ['Bolt Dummy', 'Rivet Dummy'];
+
+/** Team labels for a team mode's scoreboard. */
+const TEAM_NAMES = ['Olive', 'Rust'];
 
 /** Dev-only inspection surface used by the screenshot/e2e harness. */
 export interface AeroDebug {
@@ -68,6 +76,8 @@ export class GameSession implements SceneDriver {
   private lastAim = 0;
   private lastFrameAt = 0;
   private lastLoadoutSignature = '';
+  /** Tick of the last HUD publish, so the 10 Hz cadence is elapsed-based. */
+  private lastHudTick = -HUD_EVERY_TICKS;
   private lastBindings = appStore.getState().settings.bindings;
   private unsubscribeSettings: (() => void) | null = null;
   /** Scoped view. Client-only camera state — never reaches the sim (ADR-016). */
@@ -194,6 +204,8 @@ export class GameSession implements SceneDriver {
     // client flag the camera reads; nothing about it enters the simulation.
     // Both sources are read unconditionally — short-circuiting past
     // `consumeScopeToggle` would strand a queued tap and fire it a tick later.
+    // Presentation only, so it never touches the input frame that goes on the wire.
+    appStore.setScoreboardOpen(sampled.scoreboard);
     const keyToggled = sampled.scopeToggled;
     const buttonToggled = appStore.consumeScopeToggle();
     if (keyToggled !== buttonToggled) this.scoped = !this.scoped;
@@ -222,6 +234,10 @@ export class GameSession implements SceneDriver {
       net.tick({ moveX, moveY, aim: this.lastAim, buttons });
     }
     this.interp.capture(this.world);
+    // Corrections move the simulation instantly and the drawing gradually, so a
+    // rocket knockback the client could not predict does not snap the camera.
+    const offset = this.net?.renderOffset() ?? null;
+    if (offset !== null) this.interp.setRenderOffset(this.localPlayer, offset.x, offset.y);
     scene.applyEvents(this.world);
     scene.emitTickEffects(this.world);
     this.consumeEvents();
@@ -231,7 +247,14 @@ export class GameSession implements SceneDriver {
     // The weapon panel must track every shot and reload, not the 10 Hz HUD
     // cadence, so publish immediately whenever the loadout signature moves.
     const signature = this.loadoutSignature();
-    if (signature !== this.lastLoadoutSignature || this.world.tick % HUD_EVERY_TICKS === 0) {
+    // Elapsed-since-last-publish, not `tick % HUD_EVERY_TICKS`. A modulo assumes
+    // the tick counter increments by one, which is true for a host but not for a
+    // client — a client's `world.tick` jumps by whatever the snapshot interval is,
+    // so a modulo silently couples the HUD's refresh rate to that interval and can
+    // skip its multiples entirely.
+    const due = this.world.tick - this.lastHudTick >= HUD_EVERY_TICKS;
+    if (signature !== this.lastLoadoutSignature || due) {
+      this.lastHudTick = this.world.tick;
       this.lastLoadoutSignature = signature;
       this.publishHud();
     }
@@ -318,6 +341,10 @@ export class GameSession implements SceneDriver {
     if (slot === this.localPlayer) return appStore.getState().settings.playerName;
     const dummyIndex = this.dummies.indexOf(slot);
     if (dummyIndex >= 0) return DUMMY_NAMES[dummyIndex] ?? 'Dummy';
+    // In a LAN match the host publishes a roster; fall back to the slot number
+    // only until it arrives, which is one round trip after joining.
+    const published = this.net?.nameOf(slot) ?? null;
+    if (published !== null && published !== '') return published;
     return slot < 0 ? 'The Arena' : `Player ${String(slot + 1)}`;
   }
 
@@ -350,6 +377,70 @@ export class GameSession implements SceneDriver {
       fps: Math.round(this.game?.loop.actualFps ?? 0),
     };
     appStore.setHud(hud);
+    this.publishMatch();
+  }
+
+  /**
+   * Publish the match clock, and the scoreboard when something is showing it.
+   *
+   * Standings are only built while the scoreboard is open or the match is over,
+   * because sorting eight rows and allocating their strings ten times a second to
+   * feed a hidden panel is pure waste.
+   */
+  private publishMatch(): void {
+    const m = this.world.match;
+    // The sandbox has no clock, no limit and no way to win — there is no match to
+    // report, and the HUD hides its match bar entirely.
+    if (m.timeLimitTicks === 0 && m.fragLimit === 0 && m.phase === MatchPhase.Live) {
+      appStore.setMatch(null);
+      return;
+    }
+    const rules = rulesetFor(m.mode);
+    const mine = rules.entrantOf(this.world, this.localPlayer);
+    const timeLeft = timeRemainingSeconds(m, this.world.tick);
+    appStore.setMatch({
+      mode: m.mode,
+      modeLabel: rules.label,
+      phase: m.phase,
+      timeLeft: Number.isFinite(timeLeft) ? Math.ceil(timeLeft) : null,
+      warmupLeft: Math.ceil(warmupRemainingSeconds(m, this.world.tick)),
+      fragLimit: m.fragLimit,
+      winner: m.winner,
+      youWon: m.winner !== NO_WINNER && m.winner === mine,
+      teams: rules.teams,
+    });
+
+    const open = appStore.getState().scoreboardOpen || m.phase === MatchPhase.Over;
+    if (!open) return;
+
+    const rows: Standing[] = [];
+    for (let entrant = 0; entrant < rules.entrantCount; entrant++) {
+      if (!rules.isActive(this.world, entrant)) continue;
+      rows.push({
+        entrant,
+        name: rules.teams
+          ? (TEAM_NAMES[entrant] ?? `Team ${String(entrant + 1)}`)
+          : this.nameOf(entrant),
+        score: rules.scoreOf(this.world, entrant),
+        frags: rules.fragsOf(this.world, entrant),
+        deaths: rules.teams ? this.teamDeaths(entrant) : (this.world.players.deaths[entrant] ?? 0),
+        isLocal: entrant === mine,
+        team: rules.teams ? entrant : (this.world.players.team[entrant] ?? 0),
+      });
+    }
+    // Frags first, then fewest deaths — a 10-2 beats a 10-9 rather than tying on
+    // an arbitrary slot order.
+    rows.sort((a, b) => b.frags - a.frags || a.deaths - b.deaths || a.entrant - b.entrant);
+    appStore.setStandings(rows);
+  }
+
+  private teamDeaths(team: number): number {
+    const p = this.world.players;
+    let total = 0;
+    for (let i = 0; i < p.connected.length; i++) {
+      if (p.connected[i] === 1 && (p.team[i] ?? 0) === team) total += p.deaths[i] ?? 0;
+    }
+    return total;
   }
 
   destroy(): void {

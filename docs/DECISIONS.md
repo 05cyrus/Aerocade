@@ -934,6 +934,168 @@ described as a free Fab pack, which is not corroborated by the files. Absence of
 evidence of permissive terms, so the terms need retrieving and archiving before a build is distributed
 publicly. See [assets/README.md](../assets/README.md).
 
+## ADR-031: The match is simulated state, and modes are rulesets
+
+Before this there was no way to win or lose: you spawned, fought forever, and the only feedback was a
+kill feed and a K/D counter. `match.ts` contained exactly one function, `createMatch`. This closes M4
+for FFA — warmup, clock, frag limit, scoreboard, end screen — and puts the seam in for the rest.
+
+**Match state lives in the simulation, not in the UI.** Phase, both clocks, the frag limit, the winner
+and team frags are fields on `world.match`, snapshot-serialised and mixed into `stateHash`. Two things
+fall out of that for free. A replay of the same inputs ends the match on the same tick, because every
+clock is derived from `world.tick` and never from wall time. And a joining client learns the whole
+match from its first snapshot — mode, time left, score — so nothing about the match had to be added to
+the join handshake. Keeping it in React state instead would have meant the host and each client
+deciding independently when the match ended, which is a desync with a scoreboard attached.
+
+**Modes are rulesets, not branches.** `matchSystem` owns what is universal — the phase machine, the
+clock, the limit checks — and asks a `ModeRuleset` the three questions that actually differ: who
+scores for a kill, what an entrant's score is, and who is active. Everything is expressed in
+"entrants" (a player slot in FFA, a team in TDM) so the scoreboard, the frag limit and the winner are
+one code path across modes rather than three. CTF and Survival slot in as further rulesets. FFA and
+TDM are both implemented and tested; only FFA is reachable from the lobby so far.
+
+**`createMatch` still means the sandbox, and a ruled match is opt-in.** Adding a warmup phase broke 12
+existing tests at once, which was the useful signal: `createMatch(map, seed)` has always meant "a world
+you can play in immediately", and that is exactly right for the practice arena and for every sim test.
+So `SANDBOX_RULES` (live at once, no clock, no frag limit) is the default and `DEFAULT_MATCH_RULES` is
+what the LAN host passes. `MatchState`'s own field defaults match the sandbox too, so a bare
+`createWorld` is immediately steppable — a world that started in warmup would silently swallow every
+shot until something called `configureMatch`, which is a bug that looks like broken weapons.
+
+**Input gating is one rule in one place.** `inputGateSystem` is the system-1 `input` slot the pipeline
+always documented and never had. Warmup clears the weapon buttons but leaves movement alone — standing
+still for a countdown feels broken, and a free frag off the starting line is worse — and a finished
+match clears everything so the arena settles under the scoreboard. Checking the phase inside
+`movement` and `weapons` instead would mean a system added later simply would not know to, and "you
+could still throw grenades during the end screen" is not a bug anyone writes a test for.
+
+**Phase changes are events, not polled state.** `enterPhase` emits a `MatchPhase` event, so the
+renderer, audio and HUD learn about the match ending the same way they learn about a kill. The
+alternative — comparing the phase to what you saw last frame — puts a copy of the phase in every
+observer.
+
+**A draw is reported as a draw.** When the clock runs out on a level score the winner is `NO_WINNER`
+rather than the lowest-numbered entrant, because "Player 1 wins" on a drawn match is worse than
+saying it was drawn. Empty slots are excluded from that comparison, or seven never-occupied slots
+would tie on zero frags and every timed match would end in a draw. A frag-limit win is checked before
+the clock so that a decisive finish reads as a win rather than as time expiring.
+
+**Team frags are accumulated, not summed on demand.** Deriving a team's score from its members'
+`players.kills` looks simpler until someone disconnects and takes their kills with them — a team score
+that drops when a player rage-quits is a bug, not a rule. A team kill costs the team a frag (floored at
+zero, so farming your own side cannot be a way back up).
+
+**Two things measured rather than assumed.** The phase clock was off by one tick in the first version:
+`matchSystem` runs _before_ `stepWorld` advances the counter, so a phase that checked
+`tick - phaseStartTick` overran by a tick — invisible on a 480 s clock and the difference between a
+5.000 s and a 5.017 s countdown in a test. And `Tab` had to be `preventDefault`ed: without it the
+scoreboard key walks focus off the canvas and silently kills every subsequent keystroke.
+
+**Verified in two real browsers**, which is what the roadmap asks for: the countdown shows 5 with the
+clock reading a full 8:00 (not a partial one), 40 ticks of held fire spend no ammo during warmup, the
+clock then runs 7:49 → 7:47 with the guest reading the same 7:47 from snapshots alone, Tab shows and
+hides the scoreboard, and driving the host to a frag limit ends the match on both sides with the same
+winner — shown as "PLAYER 2 WINS" on one screen and "VICTORY" on the other. Movement after the match
+measured 0.000 m. The sandbox was re-checked and is unchanged: no match bar, no countdown, Tab does
+nothing, shooting works.
+
+**Still missing, deliberately.** There is no **rematch button**: `restartMatch` exists and is tested
+(it clears scores and re-enters warmup without rebuilding the world, so a networked match can restart
+without re-running the handshake) but nothing calls it yet. TDM is not selectable in the lobby, and CTF
+is unstarted.
+
+## ADR-032: Names are a roster message, not simulation state and not snapshot payload
+
+The scoreboard that ADR-031 shipped showed remote players as "Player 2". Names reached the host in
+`JOIN_REQ` and stopped there. `H2C_ROSTER` (`0x04`) fixes it: slot → name for everyone in the match.
+
+**Names are not simulated.** `world.players` gets no name field. Names never affect a single tick, so
+putting them in the sim would add presentation state to the thing whose whole discipline is that it
+contains nothing but state that matters (docs/ecs.md) — and it would then have to be snapshot
+serialised, hashed, and rewound.
+
+**They are not in the snapshot either.** A name changes exactly never during a match; the snapshot
+channel runs at 30 Hz. Sixteen bytes per player per snapshot is roughly a kilobyte a second spent
+retransmitting constants.
+
+**The roster is sent whole, on change.** Not as a join/leave stream. The whole thing is under 200
+bytes for eight players, and a client that missed one delta would show a wrong name for the rest of
+the match with nothing to correct it — whereas a whole roster is self-healing by construction, and the
+client replaces rather than merges, so a player who left cannot linger. It goes on `Channel.Ctrl` and
+is broadcast after WELCOME, so a joining client already knows its own slot when the roster lands and
+everyone else learns the newcomer's name in the same frame.
+
+**Verified in two browsers**, which is the only place the original defect was visible: two contexts set
+distinct names through the real settings screen, and both scoreboards then read
+`["Maverick", "Ripcord"]` with no `Player N` placeholders left. When the guest closed its tab the
+host's scoreboard dropped to `["Maverick"]` — no ghost row.
+
+**Two things this turned up.** The client's HUD publish was gated on `world.tick % HUD_EVERY_TICKS`,
+which quietly assumes the tick counter increments by one — true for a host, false for a client, whose
+tick jumps by the snapshot interval. It now publishes on elapsed ticks since the last publish, so the
+10 Hz cadence no longer depends on the snapshot rate lining up with it. And `handleJoin` was calling
+`assignTeam` before checking `addPlayer` for a full room, so a rejected join briefly assigned a team to
+slot -1 (harmless only because a negative index on a typed array is silently dropped) — reordered.
+
+## ADR-033: Clients predict their own player through the host's own systems
+
+Until now a joining client never stepped its world: it sent input and waited for a snapshot, so its
+own movement cost a full round trip. Measured in two browsers before this change, a guest's view of
+itself trailed the host by **~0.96 m** while running. After it: **0.016 m average, 0.125 m worst**,
+converging to **0.0007 m** once input stops. That is the whole point of the exercise.
+
+**One physics implementation, scoped — not a second predictor.** The four player-facing systems
+(`input`, `movement`, `physics`, `weapons`) took an optional slot parameter, and `predictPlayer` runs
+exactly those four for exactly one player. The alternative — a hand-written "predict one player"
+routine — would be two implementations of movement that must agree forever, which is the one thing
+determinism cannot survive. A test proves the point directly: from an identical starting state, 60
+ticks of run/turn/jump leave the client's position, velocity and both axes **bit-identical** to the
+host's (`toBe`, not `toBeCloseTo`).
+
+**Only those four systems, and only that slot.** Damage depends on where everyone else really is,
+projectiles and pickups are contested, and the match clock belongs to the host — predicting them
+produces a client that disagrees about who died. And a client has no idea what remote players pressed,
+so stepping them would move them on a guess that the next snapshot yanks back. Remote players stay
+where the snapshot put them.
+
+**Reconciliation replays unconditionally.** §7 describes accepting a good prediction without
+replaying; here the snapshot has already overwritten the predicted state by the time it can be
+compared, so the replay always runs and the tolerance check survives as what it is actually good for:
+telling a real misprediction (worth blending away, worth counting) from the ordinary state of simply
+being ahead of the host. One code path, same outcome.
+
+**A replayed tick must be silent, but a freshly predicted one must not.** The first version suppressed
+events inside `predictPlayer`, which made a client's own gunshot silent — deleting half of what
+prediction buys. A test caught it. Suppression now belongs to the replay loop alone: those ticks
+already announced themselves, and re-emitting would fire the same shot again on every snapshot, making
+the correction _audible_.
+
+**`prevButtons` is replayed too.** Each pending input records the button state in force before it, so a
+replay re-derives the same edges. Without it one press of a semi-auto fires twice — free damage,
+invisible in a diff, and covered by a test.
+
+**The bug this exposed was not in prediction at all.** Positions cross the wire quantised to 1/256 m
+(ADR-026) — 3.9 mm, against a physics skin of 0.1 mm. A player resting on the floor therefore projects
+up to ~2 mm _inside_ it, and because the sweep resolves X before Y, the first predicted tick ejected it
+sideways by half a tile plus half a body: **0.93 m in the wrong direction, on every snapshot.** Clients
+never ran physics before, so nothing had ever resolved that penetration. `depenetrate` now lifts a
+shallowly-overlapping player onto the surface as the snapshot is applied — vertically, because the
+overlap comes from rounding a resting position, and only for rounding-scale overlap, because a metre of
+overlap is state the host actually put there. Divergence over the wire went from 0.94 m on tick one to
+**0.00000 m**. Found by measuring per-tick divergence after three rounds of reasoning about it failed.
+
+**Corrections slide, they do not snap.** The remaining error is held as a render-only offset that
+decays over ~100 ms, applied inside `RenderInterpolator.playerX/playerY` so the camera, the rig and the
+muzzle all agree — three separately-offset copies of one position is how a gun ends up firing from
+beside its owner.
+
+**Still to come.** The interpolation buffer (§8) — remote players are drawn from the two most recent
+captured states rather than a delayed buffer, which is adequate on a LAN and wrong on a lossy link.
+Lag compensation (§9) is untouched, so hitscan still resolves against present-tick positions. And there
+is no clock sync: the predicted tick is simply the snapshot tick plus the number of unacknowledged
+inputs, rather than §6's RTT-derived estimate.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

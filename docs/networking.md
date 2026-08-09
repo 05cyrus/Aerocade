@@ -194,22 +194,39 @@ inputs arriving early are queued, inputs older than the last applied seq are dro
 
 ### 5.2 `H2C_SNAPSHOT` — host → client, unreliable, 30 Hz, delta-encoded
 
-| Field              | Type      | Notes                                                                                                                                                                                                                                               |
-| ------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| msgId              | u8        | `0x02`                                                                                                                                                                                                                                              |
-| tick               | u32       | Host sim tick of this snapshot.                                                                                                                                                                                                                     |
-| baselineTick       | u32       | Tick this delta is encoded against; `0xFFFFFFFF` = full keyframe.                                                                                                                                                                                   |
-| lastAckedInputSeq  | u16       | Newest input seq from _this_ client applied by the host — drives reconciliation.                                                                                                                                                                    |
-| playerMask         | u8        | Bit per player slot: present in this delta.                                                                                                                                                                                                         |
-| player records     | 16 B each | `id u8, flags u8, x u16, y u16, vx i16, vy i16, aim u16, health u8, fuel u8, weapon u8, ammo u8`. `flags`: alive, onGround, jetpack, hover, spawnProt, firing, facing, reloading. Delta: only slots whose record changed vs. baseline are included. |
-| projCount          | u8        | Active projectile records following.                                                                                                                                                                                                                |
-| projectile records | 11 B each | `id u16 (pool index + generation), type u8, x u16, y u16, vx i16, vy i16`.                                                                                                                                                                          |
-| pickupDirtyCount   | u8        | Changed pickups only.                                                                                                                                                                                                                               |
-| pickup records     | 2 B each  | `index u8, state u8`.                                                                                                                                                                                                                               |
+| Field              | Type      | Notes                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| msgId              | u8        | `0x02`                                                                                                                                                                                                                                                                                                                                                                              |
+| tick               | u32       | Host sim tick of this snapshot.                                                                                                                                                                                                                                                                                                                                                     |
+| baselineTick       | u32       | Tick this delta is encoded against; `0xFFFFFFFF` = full keyframe.                                                                                                                                                                                                                                                                                                                   |
+| lastAckedInputSeq  | u16       | Newest input seq from _this_ client applied by the host — drives reconciliation.                                                                                                                                                                                                                                                                                                    |
+| playerMask         | u8        | Bit per player slot: present in this delta.                                                                                                                                                                                                                                                                                                                                         |
+| player records     | 19 B each | `id u8, flags u8, x u16, y u16, vx i16, vy i16, aim u16, health u8, fuel u8, weapon u8, ammo u8, kills u8, deaths u8, team u8`. `flags`: alive, onGround, jetpack, hover, spawnProt, firing, facing, reloading. Delta: only slots whose record changed vs. baseline are included — the comparison covers the score fields, or a frag would never reach a client that had not moved. |
+| projCount          | u8        | Active projectile records following.                                                                                                                                                                                                                                                                                                                                                |
+| projectile records | 11 B each | `id u16 (pool index + generation), type u8, x u16, y u16, vx i16, vy i16`.                                                                                                                                                                                                                                                                                                          |
+| pickupDirtyCount   | u8        | Changed pickups only.                                                                                                                                                                                                                                                                                                                                                               |
+| pickup records     | 6 B each  | `index u8, state u8, x u16, y u16`.                                                                                                                                                                                                                                                                                                                                                 |
+
+| match block | 17 B | `mode u8, phase u8, winner i8, phaseStartTick u32, timeLimitTicks u32, fragLimit u16, teamFrags 2×u16`. Sent **whole in every snapshot**, never delta-encoded: it is 17 B against a snapshot of hundreds, it rarely changes, and unconditional means a client can never hold a half-known match. A joining client therefore learns the mode, both clocks and the score from its first frame, with nothing added to the handshake. |
 
 Delta encoding: the host keeps a 32-entry ring of encoded snapshots per client and diffs against the
 client's `ackTick`. If the ack is older than the ring (or absent for >1 s), it sends a keyframe.
 Worst-case keyframe ≈ 1.6 kB (8 players + ~100 projectiles); typical delta ≈ 200–400 B.
+
+### 5.2b `H2C_ROSTER` (`0x04`) — host → client, reliable
+
+`msgId u8, count u8`, then per entry `slot u8, nameLen u8, name (≤16 B UTF-8)`.
+
+Sent **whole** whenever the roster changes — a join, a leave, or the host naming itself. Whole
+rather than incremental because the entire thing is under 200 B for a full match, and a client that
+missed a single join/leave delta would show a wrong name for the rest of the match with nothing to
+correct it; a whole roster is self-healing by construction. A truncated frame stops the decoder's
+walk rather than reading past the end.
+
+Names are deliberately **not** in the snapshot: they never change during a match, and putting them
+on the 30 Hz channel would spend a kilobyte a second repeating them. They are also not simulated —
+`world.players` has no name field, and adding one would put presentation state in the sim
+(docs/ecs.md).
 
 ### 5.3 `H2C_EVENT` — host → client, reliable
 
@@ -261,6 +278,15 @@ Per snapshot received:
 
 Determinism rules (ADR-009) make step 4 exact for self-replay; cross-machine float drift is corrected
 by the very same loop, which is why bit-identical trig across engines is not required.
+
+**As implemented** (ADR-033): the replay is unconditional rather than gated on the tolerance check,
+because the snapshot has already overwritten the predicted state by the time it can be compared — the
+check instead distinguishes a real misprediction (blend it away, count it) from simply being ahead of
+the host. Steps 1–4 reuse the host's own systems via a slot parameter, never a second predictor. One
+correction was needed before any of it worked: a position arriving quantised to 1/256 m can sit ~2 mm
+inside the floor, twenty times the physics skin, and the X-before-Y sweep then ejects the player
+sideways by ~0.93 m on the first predicted tick — so `applySnapshotToWorld` depenetrates vertically as
+it projects.
 
 ## 8. Interpolation buffer and extrapolation
 

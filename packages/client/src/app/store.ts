@@ -42,6 +42,39 @@ export interface HudState {
   fps: number;
 }
 
+/**
+ * Match clock, phase and limits as the HUD needs them. Derived from the sim's
+ * `MatchState` each HUD tick rather than read live, so React re-renders at 10 Hz
+ * instead of 60.
+ */
+export interface MatchHud {
+  mode: number;
+  modeLabel: string;
+  phase: number;
+  /** Seconds left in the live phase; null when the match is unlimited. */
+  timeLeft: number | null;
+  /** Seconds left in the countdown; 0 once live. */
+  warmupLeft: number;
+  fragLimit: number;
+  /** Winning entrant, or -1 for undecided/drawn. */
+  winner: number;
+  /** Whether the local player (or their team) won. */
+  youWon: boolean;
+  teams: boolean;
+}
+
+/** One row of the scoreboard: a player in FFA, a team in TDM. */
+export interface Standing {
+  entrant: number;
+  name: string;
+  score: number;
+  frags: number;
+  deaths: number;
+  /** The local player's own row, highlighted. */
+  isLocal: boolean;
+  team: number;
+}
+
 export interface KillFeedEntry {
   id: number;
   killer: string;
@@ -81,6 +114,12 @@ export interface AppState {
    * it already connected (see Lobby).
    */
   net: NetHandle | null;
+  /** Match clock and phase, or null outside a ruled match (the sandbox). */
+  match: MatchHud | null;
+  /** Scoreboard rows, already sorted. Published only when something shows them. */
+  standings: readonly Standing[];
+  /** The player is holding the scoreboard key. Presentation only, never simulated. */
+  scoreboardOpen: boolean;
   /**
    * Why the live match ended on its own, if it did. Rendered over the frozen
    * world rather than snapping to the menu: the player needs to know whether the
@@ -121,6 +160,9 @@ let state: AppState = {
   weaponIcons: [],
   settings: { ...DEFAULT_SETTINGS },
   net: null,
+  match: null,
+  standings: [],
+  scoreboardOpen: false,
   netError: null,
 };
 
@@ -164,6 +206,9 @@ export const appStore = {
       prompt: null,
       scoped: false,
       scopeZoom: 1,
+      match: null,
+      standings: [],
+      scoreboardOpen: false,
     };
     interactRequested = false;
     scopeToggleRequested = false;
@@ -297,6 +342,35 @@ export const appStore = {
   },
   setHud(hud: HudState): void {
     state = { ...state, hud };
+    notify();
+  },
+  /** Publish match clock/phase. Cheap no-op when nothing the HUD shows moved. */
+  setMatch(match: MatchHud | null): void {
+    const current = state.match;
+    if (current === match) return;
+    if (
+      current !== null &&
+      match !== null &&
+      current.phase === match.phase &&
+      current.timeLeft === match.timeLeft &&
+      current.warmupLeft === match.warmupLeft &&
+      current.winner === match.winner &&
+      current.mode === match.mode
+    ) {
+      return;
+    }
+    state = { ...state, match };
+    notify();
+  },
+  /** Publish scoreboard rows (already sorted by the session). */
+  setStandings(standings: readonly Standing[]): void {
+    state = { ...state, standings };
+    notify();
+  },
+  /** Show/hide the scoreboard. Held, not toggled — like every other shooter. */
+  setScoreboardOpen(scoreboardOpen: boolean): void {
+    if (state.scoreboardOpen === scoreboardOpen) return;
+    state = { ...state, scoreboardOpen };
     notify();
   },
   pushKill(killer: string, victim: string): void {

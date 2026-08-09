@@ -1,4 +1,4 @@
-import { MAX_PLAYERS, SIM_DT } from '../../constants.js';
+import { MAX_PLAYERS, SIM_DT, ALL_PLAYERS } from '../../constants.js';
 import { aabbOverlapsSolid } from '../geometry.js';
 import { isOneWay, isSolid, type MapDef } from '../map/mapdef.js';
 import { TUNING } from '../tuning.js';
@@ -80,7 +80,46 @@ function oneWayLanding(
  * Integrate player positions with axis-separated swept collision (X then Y).
  * Sets `grounded` from downward contact and clamps velocity on hit surfaces.
  */
-export function physicsSystem(world: SimWorld): void {
+/**
+ * Lift a player out of any solid tile its AABB overlaps.
+ *
+ * Needed because a client's position arrives quantised to 1/256 m (ADR-026),
+ * which is ~3.9 mm — twenty times `SKIN`. A player resting on the floor can
+ * therefore project *into* it by up to ~2 mm, and since the sweep resolves X
+ * before Y, the very next predicted tick ejects it sideways by half a tile plus
+ * half a body: a violent horizontal teleport on every snapshot, which reads as
+ * terrible jitter and looks nothing like its cause.
+ *
+ * Resolving vertically is right rather than arbitrary: the overlap comes from
+ * rounding a resting position, so the surface it belongs on is the one directly
+ * above. Airborne players are left alone — there is nothing to be stuck in.
+ */
+export function depenetrate(map: MapDef, posX: number, posY: number): number {
+  const halfW = TUNING.player.width / 2;
+  const halfH = TUNING.player.height / 2;
+  const left = Math.floor(posX - halfW + 1e-9);
+  const right = Math.floor(posX + halfW - 1e-9);
+  const bottom = posY + halfH;
+  const bottomTile = Math.floor(bottom - 1e-9);
+
+  for (let tx = left; tx <= right; tx++) {
+    if (!isSolid(map, tx, bottomTile)) continue;
+    const surface = bottomTile;
+    // Only a shallow overlap is rounding; anything deeper is real geometry the
+    // host put the player in, and moving it would be inventing state.
+    if (bottom - surface > MAX_DEPENETRATION_M) continue;
+    return surface - halfH - SKIN;
+  }
+  return posY;
+}
+
+/**
+ * The deepest overlap treated as a rounding artefact. One wire quantum (1/256 m)
+ * bounds the error the codec can introduce; anything more is not rounding.
+ */
+const MAX_DEPENETRATION_M = 1 / 256;
+
+export function physicsSystem(world: SimWorld, only: number = ALL_PLAYERS): void {
   const p = world.players;
   const map = world.map;
   const halfW = TUNING.player.width / 2;
@@ -88,6 +127,7 @@ export function physicsSystem(world: SimWorld): void {
   const cap = TUNING.player.hardSpeedCap;
 
   for (let i = 0; i < MAX_PLAYERS; i++) {
+    if (only !== ALL_PLAYERS && i !== only) continue;
     if (p.connected[i] !== 1 || p.status[i] !== 1) continue;
     // A climbing player is driven entirely by the movement system, but still
     // collides with terrain — a ladder does not let you walk through walls.

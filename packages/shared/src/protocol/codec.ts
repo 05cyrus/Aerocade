@@ -30,6 +30,8 @@ export const MsgId = {
   Input: 0x01,
   Snapshot: 0x02,
   Event: 0x03,
+  /** Slot → display name for everyone in the match. Host → clients. */
+  Roster: 0x04,
   JoinRequest: 0x10,
   Welcome: 0x11,
 } as const;
@@ -48,7 +50,21 @@ export const VELOCITY_MAX_MS = 32767 / VEL_SCALE;
 
 const TWO_PI = Math.PI * 2;
 
-const PLAYER_RECORD_BYTES = 16;
+// 16 bytes of movement/loadout plus 3 of scoreboard (kills, deaths, team). The
+// scoreboard fields are cheap because the delta encoder only ships players that
+// changed, and a frag count changes far less often than a position.
+const PLAYER_RECORD_BYTES = 19;
+
+/**
+ * Match block appended to every snapshot: mode, phase, winner, the two clocks,
+ * the frag limit and team frags.
+ *
+ * Sent whole rather than delta-encoded. It is 17 bytes against a snapshot that is
+ * already hundreds, it changes rarely enough that a delta would almost always be
+ * "no change" anyway, and keeping it unconditional means the decoder has no
+ * branch that could leave a client with a half-known match.
+ */
+const MATCH_BLOCK_BYTES = 17;
 const PROJECTILE_RECORD_BYTES = 11;
 /**
  * 6 bytes, not the spec's 2. A 2-byte `index, state` record cannot place an
@@ -217,6 +233,10 @@ export interface PlayerRecord {
   fuel: number;
   weapon: number;
   ammo: number;
+  /** Scoreboard fields — a client cannot draw standings without them. */
+  kills: number;
+  deaths: number;
+  team: number;
 }
 
 export interface ProjectileRecord {
@@ -243,6 +263,21 @@ export interface PickupRecord {
  * rollback copy of the entire pool set, this one is the quantized subset that
  * crosses the network. Conflating them would be a genuinely confusing bug.
  */
+/**
+ * Match phase, clocks and score as they go over the wire. A joining client learns
+ * the whole match from its first snapshot, so nothing about it has to be added to
+ * the join handshake.
+ */
+export interface MatchRecord {
+  mode: number;
+  phase: number;
+  winner: number;
+  phaseStartTick: number;
+  timeLimitTicks: number;
+  fragLimit: number;
+  teamFrags: number[];
+}
+
 export interface WireSnapshot {
   tick: number;
   /** `KEYFRAME` when this carries full state. */
@@ -251,6 +286,7 @@ export interface WireSnapshot {
   players: PlayerRecord[];
   projectiles: ProjectileRecord[];
   pickups: PickupRecord[];
+  match: MatchRecord;
 }
 
 /** Read the authoritative world into a transport-shaped snapshot. */
@@ -290,6 +326,11 @@ export function captureSnapshot(world: SimWorld, lastAckedInputSeq: number): Wir
       fuel: Math.round(p.fuel[i] ?? 0),
       weapon: p.weapons[i * WEAPON_SLOTS + slot] ?? 0,
       ammo: Math.max(0, Math.min(255, p.ammoMag[i * WEAPON_SLOTS + slot] ?? 0)),
+      // Clamped rather than wrapped: a scoreboard that rolls over to 0 at 256
+      // frags is worse than one that sticks, and no match runs that long.
+      kills: Math.max(0, Math.min(255, p.kills[i] ?? 0)),
+      deaths: Math.max(0, Math.min(255, p.deaths[i] ?? 0)),
+      team: (p.team[i] ?? 0) & 0xff,
     });
   }
 
@@ -321,6 +362,7 @@ export function captureSnapshot(world: SimWorld, lastAckedInputSeq: number): Wir
     });
   }
 
+  const m = world.match;
   return {
     tick: world.tick,
     baselineTick: KEYFRAME,
@@ -328,6 +370,15 @@ export function captureSnapshot(world: SimWorld, lastAckedInputSeq: number): Wir
     players,
     projectiles,
     pickups,
+    match: {
+      mode: m.mode,
+      phase: m.phase,
+      winner: m.winner,
+      phaseStartTick: m.phaseStartTick,
+      timeLimitTicks: m.timeLimitTicks,
+      fragLimit: m.fragLimit,
+      teamFrags: [...m.teamFrags],
+    },
   };
 }
 
@@ -336,6 +387,9 @@ function playerRecordsEqual(a: PlayerRecord, b: PlayerRecord): boolean {
   // encode to the same bytes, and re-sending them would waste the delta.
   return (
     a.flags === b.flags &&
+    a.kills === b.kills &&
+    a.deaths === b.deaths &&
+    a.team === b.team &&
     encodePos(a.x) === encodePos(b.x) &&
     encodePos(a.y) === encodePos(b.y) &&
     encodeVel(a.vx) === encodeVel(b.vx) &&
@@ -405,7 +459,8 @@ export function encodeSnapshot(snapshot: WireSnapshot, baseline: WireSnapshot | 
     1 +
     snapshot.projectiles.length * PROJECTILE_RECORD_BYTES +
     1 +
-    pickups.length * PICKUP_RECORD_BYTES;
+    pickups.length * PICKUP_RECORD_BYTES +
+    MATCH_BLOCK_BYTES;
   const bytes = new Uint8Array(size);
   const view = new DataView(bytes.buffer);
 
@@ -431,6 +486,9 @@ export function encodeSnapshot(snapshot: WireSnapshot, baseline: WireSnapshot | 
     view.setUint8(at + 13, Math.max(0, Math.min(255, record.fuel)));
     view.setUint8(at + 14, record.weapon & 0xff);
     view.setUint8(at + 15, Math.max(0, Math.min(255, record.ammo)));
+    view.setUint8(at + 16, Math.max(0, Math.min(255, record.kills)));
+    view.setUint8(at + 17, Math.max(0, Math.min(255, record.deaths)));
+    view.setUint8(at + 18, record.team & 0xff);
     at += PLAYER_RECORD_BYTES;
   }
 
@@ -455,6 +513,17 @@ export function encodeSnapshot(snapshot: WireSnapshot, baseline: WireSnapshot | 
     view.setUint16(at + 4, encodePos(record.y), true);
     at += PICKUP_RECORD_BYTES;
   }
+
+  const m = snapshot.match;
+  view.setUint8(at, m.mode & 0xff);
+  view.setUint8(at + 1, m.phase & 0xff);
+  // Signed: NO_WINNER is -1, and an unsigned 255 would decode as a real entrant.
+  view.setInt8(at + 2, Math.max(-128, Math.min(127, m.winner)));
+  view.setUint32(at + 3, m.phaseStartTick >>> 0, true);
+  view.setUint32(at + 7, m.timeLimitTicks >>> 0, true);
+  view.setUint16(at + 11, m.fragLimit & 0xffff, true);
+  view.setUint16(at + 13, (m.teamFrags[0] ?? 0) & 0xffff, true);
+  view.setUint16(at + 15, (m.teamFrags[1] ?? 0) & 0xffff, true);
 
   return bytes;
 }
@@ -484,6 +553,9 @@ export function decodeSnapshot(bytes: Uint8Array): WireSnapshot {
       fuel: view.getUint8(at + 13),
       weapon: view.getUint8(at + 14),
       ammo: view.getUint8(at + 15),
+      kills: view.getUint8(at + 16),
+      deaths: view.getUint8(at + 17),
+      team: view.getUint8(at + 18),
     });
     at += PLAYER_RECORD_BYTES;
   }
@@ -519,7 +591,17 @@ export function decodeSnapshot(bytes: Uint8Array): WireSnapshot {
     at += PICKUP_RECORD_BYTES;
   }
 
-  return { tick, baselineTick, lastAckedInputSeq, players, projectiles, pickups };
+  const match: MatchRecord = {
+    mode: view.getUint8(at),
+    phase: view.getUint8(at + 1),
+    winner: view.getInt8(at + 2),
+    phaseStartTick: view.getUint32(at + 3, true),
+    timeLimitTicks: view.getUint32(at + 7, true),
+    fragLimit: view.getUint16(at + 11, true),
+    teamFrags: [view.getUint16(at + 13, true), view.getUint16(at + 15, true)],
+  };
+
+  return { tick, baselineTick, lastAckedInputSeq, players, projectiles, pickups, match };
 }
 
 /**
@@ -548,6 +630,8 @@ export function applyDelta(baseline: WireSnapshot, delta: WireSnapshot): WireSna
     players: [...players.values()].sort((a, b) => a.id - b.id),
     projectiles: delta.projectiles,
     pickups: [...pickups.values()].sort((a, b) => a.index - b.index),
+    // Always sent whole, so the delta's copy is simply the current one.
+    match: delta.match,
   };
 }
 
@@ -577,6 +661,65 @@ export function decodeJoinRequest(bytes: Uint8Array): JoinRequest {
   const nameLength = Math.min(view.getUint8(3), MAX_NAME_BYTES);
   const name = new TextDecoder().decode(bytes.subarray(4, 4 + nameLength));
   return { protocolVersion: view.getUint16(1, true), name };
+}
+
+/** One player's identity — everything about them that is not simulated. */
+export interface RosterEntry {
+  slot: number;
+  name: string;
+}
+
+/**
+ * Slot → name for every player in the match.
+ *
+ * Sent whole whenever the roster changes rather than as a join/leave stream. The
+ * whole thing is under 150 bytes for a full server, and a client that missed one
+ * delta would show a wrong name for the rest of the match with nothing to
+ * correct it — whereas a whole roster is self-healing by construction.
+ *
+ * Names are deliberately **not** in the snapshot: they never change during a
+ * match, and putting them on a 30 Hz channel would spend a kilobyte a second
+ * repeating them.
+ */
+export function encodeRoster(entries: readonly RosterEntry[]): Uint8Array {
+  const encoder = new TextEncoder();
+  const encoded = entries.slice(0, MAX_PLAYERS).map((entry) => ({
+    slot: entry.slot & 0xff,
+    name: encoder.encode(entry.name).slice(0, MAX_NAME_BYTES),
+  }));
+  const size = 2 + encoded.reduce((total, e) => total + 2 + e.name.length, 0);
+  const bytes = new Uint8Array(size);
+  const view = new DataView(bytes.buffer);
+  view.setUint8(0, MsgId.Roster);
+  view.setUint8(1, encoded.length);
+  let at = 2;
+  for (const entry of encoded) {
+    view.setUint8(at, entry.slot);
+    view.setUint8(at + 1, entry.name.length);
+    bytes.set(entry.name, at + 2);
+    at += 2 + entry.name.length;
+  }
+  return bytes;
+}
+
+export function decodeRoster(bytes: Uint8Array): RosterEntry[] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint8(0) !== MsgId.Roster) throw new Error('not a roster');
+  const count = view.getUint8(1);
+  const decoder = new TextDecoder();
+  const entries: RosterEntry[] = [];
+  let at = 2;
+  for (let i = 0; i < count; i++) {
+    // A truncated frame stops the walk rather than reading past the end: this
+    // arrives from the network, so a malformed length is an expected input.
+    if (at + 2 > bytes.length) break;
+    const slot = view.getUint8(at);
+    const length = Math.min(view.getUint8(at + 1), MAX_NAME_BYTES);
+    if (at + 2 + length > bytes.length) break;
+    entries.push({ slot, name: decoder.decode(bytes.subarray(at + 2, at + 2 + length)) });
+    at += 2 + length;
+  }
+  return entries;
 }
 
 export interface Welcome {

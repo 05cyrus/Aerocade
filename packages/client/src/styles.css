@@ -316,6 +316,48 @@ body,
   text-shadow: 0 0 12px rgba(60, 214, 255, 0.6);
 }
 
+/* Above the HUD (6) and the touch layer (5), below the rotate prompt (20): a
+   dead match must not be reachable *through* the notice, and the stick zones
+   would otherwise swallow the dismiss button exactly as they once did the
+   scope button (ADR-024). */
+.net-lost {
+  pointer-events: auto;
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-content: center;
+  gap: 14px;
+  text-align: center;
+  background: rgba(12, 18, 15, 0.82);
+  color: var(--ac-text);
+}
+
+.net-lost h2 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  color: var(--ac-accent2);
+}
+
+.net-lost p {
+  margin: 0;
+  color: var(--ac-dim);
+  font-size: 14px;
+  max-width: 32ch;
+}
+
+.net-lost button {
+  justify-self: center;
+  background: var(--ac-panel);
+  color: var(--ac-text);
+  border: 1px solid var(--ac-accent2);
+  border-radius: 6px;
+  padding: 8px 20px;
+  font: inherit;
+  cursor: pointer;
+}
+
 .back-button {
   pointer-events: auto;
   position: absolute;

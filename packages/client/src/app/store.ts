@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { DEFAULT_MAP_ID, type MapId } from '@aerocade/shared';
 import { DEFAULT_SETTINGS, saveSettings, type Settings } from './settings.js';
+import type { NetHandle } from '../game/net/netplay.js';
 
 /**
  * Minimal external store bridging the game session to React (no state
@@ -8,7 +9,7 @@ import { DEFAULT_SETTINGS, saveSettings, type Settings } from './settings.js';
  * `setState` on events / a 10 Hz timer; React subscribes per selector.
  */
 
-export type Screen = 'menu' | 'settings' | 'sandbox';
+export type Screen = 'menu' | 'settings' | 'host' | 'join' | 'sandbox' | 'net';
 
 /**
  * Map the next sandbox session will load. Aliased to the shared `MapId` rather
@@ -74,6 +75,18 @@ export interface AppState {
   weaponIcons: readonly string[];
   /** Persisted player preferences (docs/ui.md §6). */
   settings: Settings;
+  /**
+   * Live LAN match, once its handshake has completed. Held here rather than in a
+   * component because the game screen mounts *after* the handshake and must find
+   * it already connected (see Lobby).
+   */
+  net: NetHandle | null;
+  /**
+   * Why the live match ended on its own, if it did. Rendered over the frozen
+   * world rather than snapping to the menu: the player needs to know whether the
+   * host quit or the network dropped, and a silent jump back looks like a crash.
+   */
+  netError: string | null;
 }
 
 const initialHud: HudState = {
@@ -107,6 +120,8 @@ let state: AppState = {
   scopeZoom: 1,
   weaponIcons: [],
   settings: { ...DEFAULT_SETTINGS },
+  net: null,
+  netError: null,
 };
 
 const listeners = new Set<() => void>();
@@ -247,6 +262,32 @@ export const appStore = {
   /** Replace wholesale, without a write — used when loading from storage. */
   hydrateSettings(settings: Settings): void {
     state = { ...state, settings };
+    notify();
+  },
+  /** Hand over a connected match and switch to the game screen. */
+  startNetMatch(net: NetHandle): void {
+    state = { ...state, net, netError: null, screen: 'net' };
+    notify();
+    // Subscribed here rather than in a component: the notice must survive a
+    // remount, and the store owns the handle's whole lifetime.
+    net.onLost((reason) => {
+      appStore.reportNetLoss(reason);
+    });
+  },
+  /**
+   * The match ended without the player asking. The handle is deliberately kept
+   * open so the last known world stays on screen behind the notice; dismissing
+   * it runs `endNetMatch`, which is what actually releases the socket.
+   */
+  reportNetLoss(netError: string): void {
+    if (state.net === null || state.netError !== null) return;
+    state = { ...state, netError };
+    notify();
+  },
+  /** Tear the match down. Called when leaving, so no socket outlives a match. */
+  endNetMatch(): void {
+    state.net?.close();
+    state = { ...state, net: null, netError: null, screen: 'menu' };
     notify();
   },
   setMap(mapId: SelectedMap): void {

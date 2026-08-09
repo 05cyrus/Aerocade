@@ -21,6 +21,7 @@ import { appStore, type HudState } from '../app/store.js';
 import { KeyboardMouseInput } from './input/KeyboardMouseInput.js';
 import { touchInput } from './input/TouchInput.js';
 import { GamepadInput } from './input/GamepadInput.js';
+import type { NetHandle } from './net/netplay.js';
 import { ArenaScene, type SceneDriver } from './render/ArenaScene.js';
 import { RenderInterpolator } from './render/RenderInterpolator.js';
 
@@ -55,6 +56,8 @@ declare global {
 export class GameSession implements SceneDriver {
   private readonly world: SimWorld;
   private readonly localPlayer: number;
+  /** Null for the offline sandbox; set when hosting or joining a LAN match. */
+  private readonly net: NetHandle | null;
   private readonly dummies: number[] = [];
   private readonly input = new KeyboardMouseInput();
   private readonly pad = new GamepadInput(TUNING.player.walkSpeed, TUNING.player.runSpeed);
@@ -71,13 +74,28 @@ export class GameSession implements SceneDriver {
   private scoped = false;
   private destroyed = false;
 
-  constructor(parent: HTMLElement, mapId: MapId) {
+  /**
+   * `net` is built before the session, not inside it: a joining client's player
+   * slot only exists once the host's WELCOME arrives, and the renderer needs to
+   * know which soldier is yours to build the scene at all.
+   */
+  constructor(parent: HTMLElement, mapId: MapId, net: NetHandle | null = null) {
     appStore.reset(); // no HUD/kill-feed state may leak from a previous match
-    // The sandbox is local-only; wall-clock seeding is fine (the sim itself
-    // stays deterministic per seed — networked seeds come from the host).
-    this.world = createMatch(createMapById(mapId), Date.now() >>> 0);
-    this.localPlayer = addPlayer(this.world);
-    this.dummies.push(addPlayer(this.world), addPlayer(this.world));
+    this.net = net;
+    if (net !== null) {
+      // The world and slot come from the net handle: the host already created a
+      // seeded match, and a client's world is the one snapshots project into.
+      this.world = net.world;
+      this.localPlayer = net.localPlayer;
+    } else {
+      // The sandbox is local-only; wall-clock seeding is fine (the sim itself
+      // stays deterministic per seed — networked seeds come from the host).
+      this.world = createMatch(createMapById(mapId), Date.now() >>> 0);
+      this.localPlayer = addPlayer(this.world);
+      // Practice dummies exist only offline; in a LAN match the other soldiers
+      // are real people.
+      this.dummies.push(addPlayer(this.world), addPlayer(this.world));
+    }
 
     this.input.attach();
     // Bindings are settings, so the sampler has to track them for the whole
@@ -184,16 +202,25 @@ export class GameSession implements SceneDriver {
     // scene would aim at `activePointer`, which on a touchscreen is whichever
     // finger moved last — so driving the MOVE stick would swing your aim.
     this.lastAim = touch.aim ?? pad.aim ?? scene.computeAimFor(this.localPlayer, this.interp);
-    setInput(this.world, this.localPlayer, {
-      seq: this.world.tick,
-      moveX,
-      moveY,
-      aim: this.lastAim,
-      buttons,
-    });
-    this.driveDummies();
-
-    stepWorld(this.world);
+    const net = this.net;
+    if (net === null) {
+      // Offline: this session owns the simulation outright.
+      setInput(this.world, this.localPlayer, {
+        seq: this.world.tick,
+        moveX,
+        moveY,
+        aim: this.lastAim,
+        buttons,
+      });
+      this.driveDummies();
+      stepWorld(this.world);
+    } else {
+      // Networked. A host's `tick` sets its own input and steps the world; a
+      // client's only sends the input frame — it must NOT step, or it would
+      // fight every arriving snapshot and produce jitter indistinguishable from
+      // packet loss (ADR-028).
+      net.tick({ moveX, moveY, aim: this.lastAim, buttons });
+    }
     this.interp.capture(this.world);
     scene.applyEvents(this.world);
     scene.emitTickEffects(this.world);
@@ -330,6 +357,11 @@ export class GameSession implements SceneDriver {
     if (window.__aeroDebug?.world === this.world) delete window.__aeroDebug;
     this.unsubscribeSettings?.();
     this.unsubscribeSettings = null;
+    // The net handle is deliberately NOT closed here: the store owns it (built
+    // in the lobby, released by `endNetMatch`). Closing it from the session gave
+    // it two owners, and React StrictMode's double mount then tore the match down
+    // the instant it started — the room vanished from the bridge before anyone
+    // could join it.
     this.input.detach();
     this.game?.destroy(true);
     this.game = null;

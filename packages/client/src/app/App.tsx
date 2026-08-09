@@ -5,12 +5,20 @@ import { prefersTouchControls } from '../game/input/TouchInput.js';
 import { Hud } from './screens/Hud.js';
 import { MainMenu } from './screens/MainMenu.js';
 import { Settings } from './screens/Settings.js';
+import { Lobby } from './screens/Lobby.js';
 import { TouchControls } from './screens/TouchControls.js';
 import { appStore, useAppState } from './store.js';
 import { loadSettings } from './settings.js';
 
-function SandboxScreen({ mapId }: { mapId: MapId }): ReactElement {
+/**
+ * The in-game screen, offline or networked. `net` is already connected when it is
+ * non-null — the lobby completes the handshake before switching here, because a
+ * joining client's player slot does not exist until the host's WELCOME lands.
+ */
+function GameScreen({ mapId }: { mapId: MapId }): ReactElement {
   const mountRef = useRef<HTMLDivElement>(null);
+  const net = useAppState((s) => s.net);
+  const netError = useAppState((s) => s.netError);
   // Decided once per session: a coarse pointer without hover means a phone or
   // tablet, where thumb sticks are the only way to play. Touch-capable laptops
   // report touch points but do hover, so they keep mouse aim uncluttered.
@@ -19,25 +27,44 @@ function SandboxScreen({ mapId }: { mapId: MapId }): ReactElement {
   useEffect(() => {
     const mount = mountRef.current;
     if (mount === null) return undefined;
-    const session = new GameSession(mount, mapId);
+    const session = new GameSession(mount, mapId, net);
     return () => {
       session.destroy();
     };
-  }, [mapId]);
+    // `net` is intentionally a dependency: swapping match kind must rebuild the
+    // session, since the world and local player differ.
+  }, [mapId, net]);
 
   return (
     <>
       <div className="game-mount" ref={mountRef} />
       <Hud />
       {touch && <TouchControls />}
+      {netError !== null && (
+        <div className="net-lost" role="alert">
+          <h2>MATCH ENDED</h2>
+          <p>{netError}</p>
+          <button
+            type="button"
+            onClick={() => {
+              appStore.endNetMatch();
+            }}
+          >
+            Back to menu
+          </button>
+        </div>
+      )}
       <button
         type="button"
         className="back-button"
         onClick={() => {
-          appStore.setScreen('menu');
+          // endNetMatch closes the bridge socket too; leaving a LAN game must
+          // not leave a room registered with a player who has gone.
+          if (net !== null) appStore.endNetMatch();
+          else appStore.setScreen('menu');
         }}
       >
-        ← Leave sandbox
+        {net === null ? '← Leave sandbox' : '← Leave match'}
       </button>
     </>
   );
@@ -64,7 +91,10 @@ export function App(): ReactElement {
     <div className="app">
       {screen === 'menu' && <MainMenu />}
       {screen === 'settings' && <Settings />}
-      {screen === 'sandbox' && <SandboxScreen mapId={mapId} />}
+      {screen === 'host' && <Lobby mode="host" />}
+      {screen === 'join' && <Lobby mode="join" />}
+      {screen === 'sandbox' && <GameScreen mapId={mapId} />}
+      {screen === 'net' && <GameScreen mapId={mapId} />}
     </div>
   );
 }

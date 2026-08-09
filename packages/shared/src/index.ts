@@ -44,3 +44,6 @@ export * from './net/base64.js';
 export * from './net/transport.js';
 export * from './net/bridge-client.js';
 export * from './net/relay-transport.js';
+export * from './net/apply-snapshot.js';
+export * from './net/host-session.js';
+export * from './net/client-session.js';

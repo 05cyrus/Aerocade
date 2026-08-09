@@ -27,7 +27,8 @@ Honest status per milestone (full plan in [docs/roadmap.md](docs/roadmap.md)):
 | Ladders, one-way platforms, health/ammo/grenade pickups                     | M3        | Done                                                                                                     |
 | LAN bridge: static hosting, rooms, WebRTC signaling, WS relay fallback      | M2        | Done                                                                                                     |
 | Wire codec + `Transport` seam + WS-relay transport (tested vs. real bridge) | M2        | Done                                                                                                     |
-| Host/client session, WebRTC path, prediction, reconciliation, interpolation | M2        | Planned — codec and relay transport are in place                                                         |
+| Host/client sessions over the relay + LAN lobby (host, browse, join, leave) | M2        | Done — two browsers meet and play; a lost host or bridge is reported, not frozen                         |
+| WebRTC data channels, prediction, reconciliation, interpolation buffer      | M2        | Planned — the `Transport` seam and codec are in place; a joining client currently eats a full round trip |
 | Weapon pads: fixed spots, random guns, timed respawn                        | M3        | Done                                                                                                     |
 | Full roster + lag compensation                                              | M3        | Partial — 7 weapons, grenades, melee, health/ammo pads done; Arclight Beam, Emberjet and lag comp remain |
 | Match lifecycle: FFA/TDM/CTF, scoreboard, kill feed, timer, end screen      | M4        | Planned                                                                                                  |

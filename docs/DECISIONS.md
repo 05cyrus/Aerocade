@@ -735,6 +735,102 @@ Still to come in M2: the host/client session that drives this (host runs the aut
 broadcasts snapshots, clients send inputs), the WebRTC transport, then prediction, reconciliation and
 the interpolation buffer. `H2C_EVENT` remains specified but unencoded until the session needs it.
 
+## ADR-028: A client projects snapshots into a real `SimWorld`, and prediction waits
+
+The host/client session layer (docs/networking.md §2, §5, §6) is in place: the host runs the only
+authoritative simulation, admits joins, applies client inputs once each, and broadcasts 30 Hz
+snapshots delta-encoded per client. Nine tests drive a real host and a real client through the real
+bridge, and the assertion that matters is **convergence** — a client's world coming to agree with the
+host's is the only thing the netcode exists to achieve.
+
+**A joining client keeps a full `SimWorld` and overwrites it from snapshots.** The alternative — some
+parallel "remote state" structure — would have needed a second renderer path. Because the renderer,
+interpolator, HUD and audio layer all already read a `SimWorld`, projecting into one means a client
+needs **no** rendering changes to display a remote match, and when prediction arrives the same world
+is what gets re-simulated forward, so there is no second representation to keep in step.
+`applySnapshotToWorld` touches only the fields the wire carries; cooldowns, bloom and ladder regrip
+stay host-authoritative and untouched, which keeps it a projection rather than a partial and subtly
+wrong simulation.
+
+**There is deliberately no prediction yet, and the client feels a full round trip of lag.** That is
+the honest intermediate state. Prediction plus reconciliation (§7) is a distinct piece of subtle work,
+and a half-finished version produces rubber-banding that is far harder to diagnose than plain
+latency — the symptom stops pointing at the cause.
+
+**Sequence comparison is wrap-safe, and this is not hypothetical.** Input seq is `u16` at 60 Hz, so it
+wraps every ~18 minutes. A plain `>` works perfectly until then and the client simply goes mute —
+a bug that only appears in long matches, which is exactly when nobody is watching a debugger.
+`isNewerSeq` does a windowed comparison and is shared by both sides so they cannot disagree.
+
+**Queued inputs are applied exactly once, then cleared.** Held buttons arrive every tick anyway, so
+clearing means a dropped packet costs one tick of input rather than repeating a stale frame forever.
+
+**A repeated join is idempotent.** A lost WELCOME leaves the client unable to tell whether the host
+heard it, so it must be safe to ask again — re-joining returns the same slot instead of consuming a
+second one, verified by a test.
+
+**A stale delta is dropped, not guessed at.** If the client no longer holds the baseline a delta cites,
+it discards the frame; the host resends a keyframe once the ack goes stale, so the gap self-heals
+without a request path. Out-of-order frames are dropped too — the data channel is unordered, and
+applying an older snapshot would visibly rewind everything on screen.
+
+**The seed is passed into `HostSession`, not read off the world.** `SimWorld` keeps an `Rng` instance
+and not the seed that produced it; adding a field for the netcode's benefit would put transport
+concerns inside the simulation.
+
+Still to come in M2: the WebRTC transport behind the existing `Transport` interface, prediction and
+reconciliation, and the interpolation buffer. The lobby that makes all of it reachable is ADR-029.
+
+## ADR-029: The lobby completes the handshake, the store owns the socket, and a lost match says so
+
+Host/Join LAN Match are now live buttons. `netplay.ts` reduces the whole browser side — bridge
+connection, relay transport, session — to one `NetHandle` with six members, so `GameSession` learns
+nothing about netcode beyond three fields: which world, which player, and whether it may step.
+Verified in two real Chromium contexts against the real bridge: the guest sees the host's room, joins,
+both report two players in distinct slots, and the guest holding `D` moves **that** player +6.07 m in
+the host's authoritative sim (`A` → −10.66 m). The guest's own view trailed the host by ~1 m, which is
+exactly the missing prediction from ADR-028 made visible — a full round trip, as documented.
+
+**The handshake finishes in the lobby, before the game screen mounts.** A joining client's player slot
+does not exist until the host's WELCOME lands, and the renderer, interpolator and HUD are all built
+around a known local player id. Entering the scene first would mean rendering a match with no idea
+which soldier is yours, and every one of those readers would need a null case for a state that lasts
+one round trip.
+
+**The store owns the `NetHandle`; the session must not close it.** The first version had
+`GameSession.destroy()` close the net handle, which read as tidy and was wrong: the handle now had two
+owners. React StrictMode double-mounts, so the first teardown left the room and closed the socket the
+instant a match started — the host sat in a live-looking game while the bridge reported **zero rooms**,
+and no guest could ever see it. The failure was invisible from the host's own screen, which is what
+made it worth an ADR: lifetime belongs to whoever created the thing, and a renderer that is expected
+to be built twice cannot be trusted with it.
+
+**A match that ends on its own is reported, not frozen.** This is the gap the verification actually
+found. A client never steps its own world by design (ADR-028), so a dead socket has no symptom — the
+world simply stops, indistinguishable from a hang. `BridgeEvents` already carried `onDisconnected` and
+`onRoomClosed`; nothing was listening. Both now feed a one-shot latch (one-shot because a dropped
+socket _also_ closes the room — two events, one thing that happened) which the store turns into a
+notice drawn **over** the last known frame rather than a snap back to the menu: the player needs to
+know whether the host quit or the network dropped, and a silent jump looks like a crash. The handle is
+deliberately left open until the notice is dismissed, so the frame stays on screen. Verified by
+killing the host and then by killing the bridge process mid-match: `the host ended the match` and
+`lost the connection to the LAN bridge` / `...to the host`, with a control asserting no notice exists
+while the match is healthy. The latch also notifies a late subscriber, because a socket can die
+between WELCOME and the store's subscription.
+
+**A peer too slow to drain its socket gets dropped, and that is the heartbeat working.** Chasing the
+frozen guest turned up the mechanism: this box software-renders WebGL, two contexts starved the guest
+page to roughly one animation frame per second, Chromium's network service stops reading a socket the
+renderer is not draining, so the bridge's ping was never read, never ponged, and two missed pongs
+terminated the peer (code 1006). No code was wrong. It is recorded because the same chain will hit a
+genuinely underpowered phone, and the visible symptom — one player freezing while everyone else plays
+on — points at the network rather than at frame rate. The notice above is what makes it legible.
+
+**The shipped lobby is the bottom half of ui.md §7.** Host-immediately, a 2 s polled room list, join,
+and plain-language failures are in. QR share, the `contacting bridge → … → in lobby` progress
+breakdown and the RTC-vs-relay badge are not — the badge in particular has nothing to report until
+the WebRTC transport exists.
+
 ## Milestones
 
 - **M0** Scaffold + tooling + docs (this ADR) ✅

@@ -65,11 +65,21 @@ export function MainMenu(): ReactElement {
       >
         Training Sandbox
       </button>
-      <button type="button" disabled title="Arrives with milestone M2 (LAN multiplayer)">
-        Host LAN Match — M2
+      <button
+        type="button"
+        onClick={() => {
+          appStore.setScreen('host');
+        }}
+      >
+        Host LAN Match
       </button>
-      <button type="button" disabled title="Arrives with milestone M2 (LAN multiplayer)">
-        Join LAN Match — M2
+      <button
+        type="button"
+        onClick={() => {
+          appStore.setScreen('join');
+        }}
+      >
+        Join LAN Match
       </button>
       <button
         type="button"

@@ -223,6 +223,13 @@ Join progress is explicit: `contacting bridge → joining room → negotiating t
 with the transport step surfacing the RTC-vs-relay outcome as a small badge (details in
 [networking.md](networking.md)). Every failure has a retry affordance and a plain-language reason.
 
+**Shipped so far** (ADR-029): hosting opens a room immediately, the join screen polls the list every
+2 s, and failures are reported in place with the `?bridge=ip:port` hint. A match that ends on its own —
+host quit, socket dropped — draws a notice over the last frame rather than returning silently to the
+menu, because a client does not step its own world and so has no other symptom to show. Still to come:
+the QR share, the four-step progress breakdown, and the transport badge (which has nothing to report
+until the WebRTC path exists).
+
 ## 8. Accessibility
 
 - **Color-safe teams:** team identity is never color-alone — palettes are chosen for deuteranopia/
